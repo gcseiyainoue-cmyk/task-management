@@ -5,13 +5,14 @@ import TaskCard from '@/Components/TaskCard.vue';
 
 const props = defineProps({
     tasks: Array,
+    selectedTasks: Array,
     isDraggable: { type: Boolean, default: false },
     showPriority: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['update-status', 'delete-task', 'update:tasks', 'reorder']);
+// toggle-select を追加
+const emit = defineEmits(['update-status', 'delete-task', 'update:tasks', 'reorder', 'edit-task', 'toggle-select']);
 
-// v-model用
 const modelValue = computed({
     get: () => props.tasks,
     set: (value) => emit('update:tasks', value)
@@ -32,8 +33,11 @@ const modelValue = computed({
                 :task="task" 
                 :show-priority="showPriority" 
                 :priority-index="index" 
+                :is-selected="selectedTasks.includes(task.id)" 
                 @update-status="$emit('update-status', task)" 
-                @delete-task="$emit('delete-task', task.id)" 
+                @delete-task="$emit('delete-task', task.id)"
+                @edit-task="$emit('edit-task', task)"
+                @toggle-select="$emit('toggle-select', task.id)"
             />
         </template>
     </draggable>
@@ -44,8 +48,11 @@ const modelValue = computed({
             v-for="task in tasks" 
             :key="task.id" 
             :task="task" 
+            :is-selected="selectedTasks.includes(task.id)"
             @update-status="$emit('update-status', task)" 
             @delete-task="$emit('delete-task', task.id)" 
+            @edit-task="$emit('edit-task', task)"
+            @toggle-select="$emit('toggle-select', task.id)"
         />
     </div>
 </template>

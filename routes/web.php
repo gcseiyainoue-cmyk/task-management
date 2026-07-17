@@ -27,11 +27,14 @@ Route::middleware('auth')->group(function () {
     // タスク関連のルーティング
     Route::get('/tasks/create', [TaskController::class, 'create'])->name('tasks.create');
     Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
-    
-    // ★以下を追加しました
     Route::get('/tasks/{task}/edit', [TaskController::class, 'edit'])->name('tasks.edit');
     
+    // ★固定ルートを先に定義
     Route::patch('/tasks/reorder', [TaskController::class, 'reorder'])->name('tasks.reorder');
+    Route::patch('/tasks/bulk-update', [TaskController::class, 'bulkUpdate'])->name('tasks.bulk-update');
+    Route::delete('/tasks/bulk-destroy', [TaskController::class, 'bulkDestroy'])->name('tasks.bulk-destroy');
+
+    // ★動的ルート（{task} を含むもの）を後に定義
     Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
 });

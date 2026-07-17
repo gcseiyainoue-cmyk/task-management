@@ -129,4 +129,46 @@ class TaskController extends Controller
         // Inertiaのリクエストに応答するためリダイレクトを返す
         return redirect()->back();
     }
+
+    public function bulkUpdate(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:tasks,id',
+            'status' => 'nullable|integer|in:0,1,2',
+            'due_date' => 'nullable|date',
+        ]);
+
+        // 更新するデータを動的に生成
+        $updateData = [];
+        if ($request->has('status')) {
+            $updateData['status'] = $request->status;
+        }
+        if ($request->has('due_date')) {
+            $updateData['due_date'] = $request->due_date;
+        }
+
+        if (!empty($updateData)) {
+            $request->user()->tasks()
+                ->whereIn('id', $request->ids)
+                ->update($updateData);
+        }
+
+        return redirect()->back()->with('message', 'タスクを一括更新しました。');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:tasks,id',
+        ]);
+
+        $request->user()->tasks()
+            ->whereIn('id', $request->ids)
+            ->delete();
+
+        return redirect()->back()->with('message', 'タスクを一括削除しました。');
+    }
+
 }

@@ -32,7 +32,7 @@ The content is organized as follows:
 <notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Only files matching these patterns are included: app/**/*, resources/**/*, routes/**/*, database/**/*, composer.json, package.json, vite.config.js
+- Only files matching these patterns are included: app/**/*, resources/**/*, routes/**/*, database/**/*, composer.json, package.json, vite.config.js, app/Http/Controllers/TaskController.php, routes/web.php, app/Models/Task.php, resources/js/Pages/Dashboard.vue, resources/js/Components/**/*.vue, resources/js/Composables/**/*.js
 - Files matching these patterns are excluded: **/node_modules/**, **/vendor/**, **/storage/**, **/bootstrap/cache/**, **/*.log, **/*.lock
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
@@ -101,7 +101,13 @@ resources/
       PrimaryButton.vue
       ResponsiveNavLink.vue
       SecondaryButton.vue
+      TaskCard.vue
+      TaskList.vue
+      TaskSummary.vue
+      TaskTabs.vue
       TextInput.vue
+    Composables/
+      useTaskUtils.js
     Layouts/
       AuthenticatedLayout.vue
       GuestLayout.vue
@@ -629,6 +635,7 @@ class TaskController extends Controller
     public function index()
     {
         $user = auth()->user();
+        $today = now()->toDateString();
 
         // 1. 全タスク（期限順で固定・参照用）
         $allTasks = $user->tasks()
@@ -637,16 +644,24 @@ class TaskController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // 2. 今日のタスク（sort_orderで手動並び替え可能にする）
-        // 例として期限が今日までのもの、またはステータスが未完了のものに絞る
+        // 2. 今日のタスク（🟢 純粋に「今日が期限」かつ「未完了」のもの）
+        // ※ステータスの「完了」コードが 2 だと仮定しています。適宜プロジェクトの数値に合わせてください。
         $todayTasks = $user->tasks()
-            ->where('due_date', '<=', now()->toDateString()) 
+            ->whereDate('due_date', $today) 
             ->orderBy('sort_order', 'asc')
+            ->get();
+
+        // 3. 🚨【新設】期限切れのタスク（「今日より前が期限」かつ「未完了」のもの）
+        $overdueTasks = $user->tasks()
+            ->whereDate('due_date', '<', $today)
+            ->where('status', '!=', 2) // 完了済みのタスクは除外
+            ->orderBy('due_date', 'asc') // 古い順に並べる
             ->get();
 
         return Inertia::render('Dashboard', [
             'allTasks' => $allTasks,
             'todayTasks' => $todayTasks,
+            'overdueTasks' => $overdueTasks, // 👈 フロントエンドへ渡す
         ]);
     }
 
@@ -690,11 +705,12 @@ class TaskController extends Controller
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
-            'due_date' => 'sometimes|nullable|date|after_or_equal:today',
+            // ★ここを修正: 更新時は期限切れタスクを保存できるようにする
+            'due_date' => 'sometimes|nullable|date', 
             'status' => 'sometimes|required|integer|in:0,1,2',
             'category' => 'sometimes|required|string|max:20',
         ], [
-            'due_date.after_or_equal' => '期限には、今日以降の日付を指定してください。',
+            // エラーメッセージ（必要であれば）
         ], [
             'title' => 'タスク名',
             'due_date' => '期限',
@@ -772,10 +788,6 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => [
                 'user' => $request->user(),
-            ],
-            // フラッシュメッセージを共有するための設定[cite: 6]
-            'flash' => [
-                'message' => fn () => $request->session()->get('message'),
             ],
         ];
     }
@@ -1813,6 +1825,263 @@ defineProps({
 </template>
 </file>
 
+<file path="resources/js/Components/TaskCard.vue">
+<script setup>
+import { Link } from '@inertiajs/vue3';
+import { useTaskUtils } from '@/Composables/useTaskUtils';
+
+const props = defineProps({
+    task: Object,
+    showPriority: { type: Boolean, default: false }, // 「今日のタスク」用
+    priorityIndex: { type: Number, default: null }, // 順位
+});
+
+const emit = defineEmits(['update-status', 'delete-task']);
+
+const { isToday, isExpired, getStatusBadge, getCardClass, getPriorityBadgeClass } = useTaskUtils();
+
+const updateStatus = () => emit('update-status', props.task);
+const deleteTask = () => emit('delete-task', props.task.id);
+</script>
+
+<template>
+    <div 
+        class="p-4 border rounded-lg transition duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4"
+        :class="getCardClass(task)"
+    >
+        <div class="flex-1 flex items-start gap-4">
+            <!-- 優先度バッジ（今日のタスク用） -->
+            <div 
+                v-if="showPriority"
+                class="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-xs border shadow-sm"
+                :class="getPriorityBadgeClass(priorityIndex)"
+            >
+                {{ priorityIndex + 1 }}
+            </div>
+
+            <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                    <!-- ステータス切替 -->
+                    <button 
+                        @click="updateStatus"
+                        type="button"
+                        class="px-2 py-0.5 text-[11px] font-semibold rounded-full border transition hover:opacity-80 focus:outline-none" 
+                        :class="getStatusBadge(task.status).class"
+                    >
+                        {{ getStatusBadge(task.status).text }}
+                    </button>
+                    <!-- カテゴリ -->
+                    <span v-if="task.category" class="text-[11px] font-medium bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-200" :class="{ 'opacity-50': task.status === 2 }">
+                        {{ task.category }}
+                    </span>
+                    <!-- タイトル -->
+                    <h4 class="text-sm font-bold text-slate-700" :class="{ 'line-through text-slate-400': task.status === 2 }">
+                        {{ task.title }}
+                    </h4>
+                </div>
+                <p v-if="task.description" class="text-xs mt-1 leading-relaxed" :class="task.status === 2 ? 'text-slate-300' : 'text-slate-500'">{{ task.description }}</p>
+            </div>
+        </div>
+        
+        <!-- 操作エリア -->
+        <div class="flex items-center gap-4 justify-between md:justify-end border-t md:border-t-0 border-slate-100 pt-3 md:pt-0">
+            <span 
+                :class="[
+                    'text-[11px] px-2 py-1 rounded whitespace-nowrap font-medium border',
+                    isExpired(task.due_date) && task.status !== 2
+                        ? 'bg-rose-50 text-rose-600 border-rose-200'
+                        : isToday(task.due_date)
+                        ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                        : 'bg-slate-50 text-slate-500 border-slate-200'
+                ]"
+            >
+                期限: {{ isToday(task.due_date) ? '今日' : (task.due_date || '未設定') }}
+            </span>
+            
+            <div class="flex items-center gap-1" :class="{ 'opacity-40': task.status === 2 }">
+                <Link 
+                    :href="route('tasks.edit', task.id)" 
+                    class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-full hover:bg-slate-100 transition-all duration-150"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                </Link>
+                <button 
+                    @click="deleteTask" 
+                    class="p-1.5 text-slate-400 hover:text-rose-600 rounded-full hover:bg-rose-50 transition-all duration-150"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+</file>
+
+<file path="resources/js/Components/TaskList.vue">
+<script setup>
+import { computed } from 'vue';
+import draggable from 'vuedraggable';
+import TaskCard from '@/Components/TaskCard.vue';
+
+const props = defineProps({
+    tasks: Array,
+    isDraggable: { type: Boolean, default: false },
+    showPriority: { type: Boolean, default: false }
+});
+
+const emit = defineEmits(['update-status', 'delete-task', 'update:tasks', 'reorder']);
+
+// v-model用
+const modelValue = computed({
+    get: () => props.tasks,
+    set: (value) => emit('update:tasks', value)
+});
+</script>
+
+<template>
+    <!-- ドラッグ可能な場合 -->
+    <draggable 
+        v-if="isDraggable" 
+        v-model="modelValue" 
+        item-key="id" 
+        class="space-y-3"
+        @end="$emit('reorder')"
+    >
+        <template #item="{ element: task, index }">
+            <TaskCard 
+                :task="task" 
+                :show-priority="showPriority" 
+                :priority-index="index" 
+                @update-status="$emit('update-status', task)" 
+                @delete-task="$emit('delete-task', task.id)" 
+            />
+        </template>
+    </draggable>
+
+    <!-- 通常リストの場合 -->
+    <div v-else class="space-y-3">
+        <TaskCard 
+            v-for="task in tasks" 
+            :key="task.id" 
+            :task="task" 
+            @update-status="$emit('update-status', task)" 
+            @delete-task="$emit('delete-task', task.id)" 
+        />
+    </div>
+</template>
+</file>
+
+<file path="resources/js/Components/TaskSummary.vue">
+<script setup>
+import { Doughnut } from 'vue-chartjs';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+
+ChartJS.register(ArcElement, Tooltip, Legend);
+
+defineProps({
+    activeTab: String,
+    globalSummary: Object, // マイタスク用の統計データ
+    todaySummary: Object,  // 今日のタスク用の統計データ
+    chartData: Object,     // グラフ用のデータ
+});
+</script>
+
+<template>
+    <div class="mb-8">
+        <!-- A. マイタスク一覧タブ（リスクと負荷の統計） -->
+        <div v-if="activeTab === 'all'" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
+                <span class="text-slate-400 text-xs font-medium">未完了の総タスク</span>
+                <span class="text-xl font-bold text-slate-700 mt-1">{{ globalSummary.uncompletedCount }}</span>
+            </div>
+            <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
+                <span class="text-rose-500 text-xs font-bold">⚠️ 期限切れ</span>
+                <span class="text-xl font-bold text-rose-600 mt-1">{{ globalSummary.expiredCount }}</span>
+            </div>
+            <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
+                <span class="text-amber-500 text-xs font-medium">⏳ 3日以内の期限</span>
+                <span class="text-xl font-bold text-amber-600 mt-1">{{ globalSummary.upcomingCount }}</span>
+            </div>
+            <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col justify-center">
+                <span class="text-slate-400 text-xs font-medium mb-2 text-center">未完了タスクの内訳</span>
+                <div v-if="Object.keys(globalSummary.categoryMap).length === 0" class="text-xs text-slate-400 text-center py-2">
+                    未完了タスクなし
+                </div>
+                <div v-else class="space-y-1.5 max-h-[70px] overflow-y-auto pr-1">
+                    <div v-for="(count, cat) in globalSummary.categoryMap" :key="cat" class="flex flex-col text-xs">
+                        <div class="flex justify-between text-[11px] text-slate-600 font-medium mb-0.5">
+                            <span class="truncate max-w-[100px]">{{ cat }}</span>
+                            <span>{{ count }}個</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-indigo-500 h-1.5 rounded-full transition-all duration-500" :style="{ width: `${(count / globalSummary.uncompletedCount) * 100}%` }"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- B. 今日のタスクタブ（消化率統計） -->
+        <div v-else-if="activeTab === 'today'" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
+                <span class="text-slate-400 text-xs font-medium">今日の総タスク</span>
+                <span class="text-xl font-bold text-slate-700 mt-1">{{ todaySummary.total }}</span>
+            </div>
+            <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
+                <span class="text-indigo-500 text-xs font-medium">今日の残り</span>
+                <span class="text-xl font-bold text-indigo-600 mt-1">{{ todaySummary.remaining }}</span>
+            </div>
+            <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
+                <span class="text-emerald-500 text-xs font-medium">今日の完了</span>
+                <span class="text-xl font-bold text-emerald-600 mt-1">{{ todaySummary.completed }}</span>
+            </div>
+            <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex items-center justify-center">
+                <div class="relative w-20 h-20 flex items-center justify-center">
+                    <Doughnut 
+                        :data="chartData" 
+                        :options="{ maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: false } } }" 
+                    />
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <span class="text-sm font-extrabold text-slate-800 leading-none">{{ todaySummary.percentage }}%</span>
+                        <span class="text-[9px] text-slate-400 font-bold mt-0.5">消化</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+</file>
+
+<file path="resources/js/Components/TaskTabs.vue">
+<script setup>
+defineProps({
+    activeTab: String
+});
+
+defineEmits(['update:activeTab']);
+</script>
+
+<template>
+    <div class="flex border-b border-slate-200 overflow-x-auto">
+        <button 
+            @click="$emit('update:activeTab', 'overdue')" 
+            :class="activeTab === 'overdue' ? 'border-b-2 border-rose-600 text-rose-600' : 'text-slate-400 hover:text-rose-500'" 
+            class="px-6 py-2.5 font-bold text-sm transition"
+        >⚠️ 期限切れ</button>
+        <button 
+            @click="$emit('update:activeTab', 'today')" 
+            :class="activeTab === 'today' ? 'border-b-2 border-slate-800 text-slate-800' : 'text-slate-400 hover:text-slate-600'" 
+            class="px-6 py-2.5 font-medium text-sm transition"
+        >今日のタスク</button>
+        <button 
+            @click="$emit('update:activeTab', 'all')" 
+            :class="activeTab === 'all' ? 'border-b-2 border-slate-800 text-slate-800' : 'text-slate-400 hover:text-slate-600'" 
+            class="px-6 py-2.5 font-medium text-sm transition"
+        >マイタスク一覧</button>
+    </div>
+</template>
+</file>
+
 <file path="resources/js/Components/TextInput.vue">
 <script setup>
 import { onMounted, ref } from 'vue';
@@ -1840,6 +2109,51 @@ defineExpose({ focus: () => input.value.focus() });
         ref="input"
     />
 </template>
+</file>
+
+<file path="resources/js/Composables/useTaskUtils.js">
+export function useTaskUtils() {
+    const isToday = (dateString) => {
+        const today = new Date().toISOString().split('T')[0];
+        return dateString === today;
+    };
+
+    const isExpired = (dateString) => {
+        if (!dateString) return false;
+        const today = new Date().toISOString().split('T')[0];
+        return dateString < today;
+    };
+
+    const getStatusBadge = (status) => {
+        const statuses = {
+            0: { text: '⚪ 未着手', class: 'bg-slate-100/70 text-slate-600 border-slate-200' },
+            1: { text: '⚡ 進行中', class: 'bg-indigo-50 text-indigo-600 border-indigo-150 font-medium' },
+            2: { text: '✅ 完了', class: 'bg-emerald-50 text-emerald-600 border-emerald-150 font-medium' },
+        };
+        return statuses[status] || { text: '❓ 不明', class: 'bg-rose-50 text-rose-600 border-rose-200' };
+    };
+
+    const getCardClass = (task) => {
+        if (isExpired(task.due_date) && task.status !== 2) {
+            return 'border-l-2 border-l-rose-500 border-y-slate-200 border-r-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)]';
+        }
+        if (task.status === 2) {
+            return 'border-slate-200 bg-slate-50/60 opacity-60 shadow-none';
+        }
+        if (task.status === 1) {
+            return 'border-l-2 border-l-indigo-500 border-y-slate-200 border-r-slate-200 bg-white shadow-[0_4px_16px_rgba(99,102,241,0.08)]';
+        }
+        return 'border-slate-200 bg-white shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:border-slate-300 hover:shadow-[0_6px_20px_rgba(15,23,42,0.1)] transition-all duration-200';
+    };
+
+    const getPriorityBadgeClass = (index) => {
+        if (index === 0) return 'bg-slate-800 text-white border-transparent font-semibold shadow-sm';
+        if (index === 1 || index === 2) return 'bg-slate-100 text-slate-700 border-slate-200 font-medium';
+        return 'bg-slate-50 text-slate-400 border-slate-100';
+    };
+
+    return { isToday, isExpired, getStatusBadge, getCardClass, getPriorityBadgeClass };
+}
 </file>
 
 <file path="resources/js/Layouts/AuthenticatedLayout.vue">
@@ -2033,13 +2347,6 @@ const showingNavigationDropdown = ref(false);
                     <slot name="header" />
                 </div>
             </header>
-
-            <!-- フラッシュメッセージ表示エリア -->
-            <div v-if="$page.props.flash.message" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
-                    {{ $page.props.flash.message }}
-                </div>
-            </div>
 
             <!-- Page Content -->
             <main>
@@ -3163,45 +3470,46 @@ const submit = () => {
 import { ref, computed, watch } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import { Doughnut } from 'vue-chartjs';
-import draggable from 'vuedraggable';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+// コンポーネント・コンポーザブルのインポート
+import { useTaskUtils } from '@/Composables/useTaskUtils';
+import TaskSummary from '@/Components/TaskSummary.vue';
+import TaskList from '@/Components/TaskList.vue';
+import TaskTabs from '@/Components/TaskTabs.vue';
 
 const props = defineProps({
-    allTasks: { type: Array, default: () => [] },
-    todayTasks: { type: Array, default: () => [] },
+    allTasks: Array,
+    todayTasks: Array,
+    overdueTasks: Array,
+    weeklyTasks: Array,
+    somedayTasks: Array,
+    completedTasks: Array,
 });
 
-// タブ管理の状態
-const activeTab = ref('all');
+const { isToday, isExpired } = useTaskUtils();
 
-// 今日のタスク専用のドラッグ＆ドロップ用ローカル状態
+// 状態管理
+const activeTab = ref('all');
+const hideCompleted = ref(false);
+const searchQuery = ref('');
+const sortBy = ref('due_date');
 const todayDragTasks = ref([...props.todayTasks]);
 
-// 親（Props）から渡される今日のタスクデータが更新されたら同期させる
+// 【自動ソート機能】今日のタスクの更新を監視して完了済みを下に
 watch(() => props.todayTasks, (newTasks) => {
-    todayDragTasks.value = [...newTasks];
+    todayDragTasks.value = [...newTasks].sort((a, b) => {
+        const aCompleted = a.status === 2;
+        const bCompleted = b.status === 2;
+        if (aCompleted && !bCompleted) return 1;
+        if (!aCompleted && bCompleted) return -1;
+        return 0;
+    });
 }, { deep: true, immediate: true });
 
-// 完了タスクを隠すフラグ
-const hideCompleted = ref(false);
-// 検索キーワード用
-const searchQuery = ref('');
-// ソート条件用
-const sortBy = ref('due_date');
-
-// 表示用のタスクを計算する（完了非表示 ＋ キーワード検索 ＋ 並び替え）
+// --- 算出プロパティ ---
 const filteredTasks = computed(() => {
     let tasks = [...props.allTasks];
-
-    // 完了タスクを非表示にする
-    if (hideCompleted.value) {
-        tasks = tasks.filter(task => task.status !== 2);
-    }
-
-    // キーワードで絞り込む
+    if (hideCompleted.value) tasks = tasks.filter(task => task.status !== 2);
     if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase();
         tasks = tasks.filter(task => 
@@ -3210,99 +3518,18 @@ const filteredTasks = computed(() => {
             (task.category && task.category.toLowerCase().includes(query))
         );
     }
-
-    // 並び替え処理
     tasks.sort((a, b) => {
-        if (sortBy.value === 'due_date') {
-            return new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31');
-        } else if (sortBy.value === 'title') {
-            return a.title.localeCompare(b.title);
-        }
+        if (sortBy.value === 'due_date') return new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31');
+        if (sortBy.value === 'title') return a.title.localeCompare(b.title);
         return 0;
     });
-
     return tasks;
 });
 
-// 今日のタスク並び替え終了時の処理
-const onEndToday = () => {
-    router.patch(route('tasks.reorder'), {
-        tasks: todayDragTasks.value.map((task, index) => ({ id: task.id, sort_order: index }))
-    }, { preserveScroll: true });
-};
-
-// ==========================================
-// 📊 【大幅改善】タブごとに目的が異なる統計ロジック
-// ==========================================
-
-// 1. 【マイタスク一覧（all）】用の「リスク・負荷」集計
-const globalSummary = computed(() => {
-    // 完了(status === 2) 以外の未完了タスクをベースにする
-    const activeTasks = props.allTasks.filter(t => t.status !== 2);
-    
-    const uncompletedCount = activeTasks.length;
-    
-    // 期限切れタスクのカウント（未完了のみ）
-    const expiredCount = activeTasks.filter(t => isExpired(t.due_date)).length;
-    
-    // 近日中のタスク（3日以内）
-    const upcomingCount = upcomingTasks.value.length;
-
-    // カテゴリ別の未完了タスク数を集計（グラフ用）
-    const categoryMap = {};
-    activeTasks.forEach(t => {
-        const cat = t.category || '未分類';
-        categoryMap[cat] = (categoryMap[cat] || 0) + 1;
-    });
-
-    return { uncompletedCount, expiredCount, upcomingCount, categoryMap };
-});
-
-// 2. 【今日のタスク（today）】用の「今日1日の消化率」集計
-const todaySummary = computed(() => {
-    const total = todayDragTasks.value.length;
-    const completed = todayDragTasks.value.filter(t => t.status === 2).length;
-    const remaining = total - completed;
-    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-    
-    return { total, completed, remaining, percentage };
-});
-
-// 3. 【動的グラフデータ】タブによってグラフの種類とデータを完全に分ける
-const chartData = computed(() => {
-    if (activeTab.value === 'today') {
-        // 【今日のタスク】：単純な「完了」 vs 「残り」の消化円グラフ
-        return {
-            labels: ['完了', '残り'],
-            datasets: [{
-                data: [todaySummary.value.completed, todaySummary.value.remaining],
-                backgroundColor: ['#10b981', '#f1f5f9'] // エメラルド（完了）と 薄グレー（残り）
-            }]
-        };
-    } else {
-        // 【マイタスク一覧】：未完了タスクの「カテゴリ別分布」グラフ（どこに負荷が偏っているか）
-        const categories = Object.keys(globalSummary.value.categoryMap);
-        const data = Object.values(globalSummary.value.categoryMap);
-        
-        // シックで統一感のあるニュアンスカラーパレット
-        const colors = ['#6366f1', '#3b82f6', '#ec4899', '#f59e0b', '#10b981', '#64748b'];
-        
-        return {
-            labels: categories.length > 0 ? categories : ['未完了タスクなし'],
-            datasets: [{
-                data: data.length > 0 ? data : [1],
-                backgroundColor: data.length > 0 ? colors.slice(0, categories.length) : ['#e2e8f0']
-            }]
-        };
-    }
-});
-
-// 近日中に期限が来るタスク（明日から3日後まで）
 const upcomingTasks = computed(() => {
     const today = new Date();
     const threeDaysLater = new Date();
     threeDaysLater.setDate(today.getDate() + 3);
-
     return props.allTasks.filter(task => {
         if (!task.due_date || task.status === 2) return false;
         const dueDate = new Date(task.due_date);
@@ -3310,452 +3537,82 @@ const upcomingTasks = computed(() => {
     });
 });
 
-// 【改善】目に優しいニュアンスカラーに変更
-const getStatusBadge = (status) => {
-    const statuses = {
-        0: { text: '⚪ 未着手', class: 'bg-slate-100/70 text-slate-600 border-slate-200' },
-        1: { text: '⚡ 進行中', class: 'bg-indigo-50 text-indigo-600 border-indigo-150 font-medium' },
-        2: { text: '✅ 完了', class: 'bg-emerald-50 text-emerald-600 border-emerald-150 font-medium' },
+const globalSummary = computed(() => {
+    const activeTasks = props.allTasks.filter(t => t.status !== 2);
+    const categoryMap = {};
+    activeTasks.forEach(t => { categoryMap[t.category || '未分類'] = (categoryMap[t.category || '未分類'] || 0) + 1; });
+    return { 
+        uncompletedCount: activeTasks.length, 
+        expiredCount: activeTasks.filter(t => isExpired(t.due_date)).length, 
+        upcomingCount: upcomingTasks.value.length, 
+        categoryMap 
     };
-    return statuses[status] || { text: '❓ 不明', class: 'bg-rose-50 text-rose-600 border-rose-200' };
-};
+});
 
-// 【改善】通常時（非ホバー時）でも背景と完全に分離して見えるように、シャドウとボーダーを強化
-const getCardClass = (task) => {
-    if (isExpired(task.due_date) && task.status !== 2) {
-        return 'border-l-2 border-l-rose-500 border-y-slate-200 border-r-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)]';
-    }
-    if (task.status === 2) {
-        // 完了：終わったものなので、あえて影を消して背景に沈め、境界線だけで見せる
-        return 'border-slate-200 bg-slate-50/60 opacity-60 shadow-none';
-    }
-    if (task.status === 1) {
-        // 進行中：インディゴのラインに加え、常時しっかりとしたシャドウを付与して際立たせる
-        return 'border-l-2 border-l-indigo-500 border-y-slate-200 border-r-slate-200 bg-white shadow-[0_4px_16px_rgba(99,102,241,0.08)]';
-    }
-    // 未着手（通常時）：不透明な境界線と、常時見える上品なミディアムシャドウ
-    return 'border-slate-200 bg-white shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:border-slate-300 hover:shadow-[0_6px_20px_rgba(15,23,42,0.1)] transition-all duration-200';
-};
+const todaySummary = computed(() => {
+    const total = todayDragTasks.value.length;
+    const completed = todayDragTasks.value.filter(t => t.status === 2).length;
+    return { total, completed, remaining: total - completed, percentage: total > 0 ? Math.round((completed / total) * 100) : 0 };
+});
 
-const isToday = (dateString) => {
-    const today = new Date().toISOString().split('T')[0];
-    return dateString === today;
-};
+const chartData = computed(() => {
+    if (activeTab.value === 'today') {
+        return { labels: ['完了', '残り'], datasets: [{ data: [todaySummary.value.completed, todaySummary.value.remaining], backgroundColor: ['#10b981', '#f1f5f9'] }] };
+    } else {
+        const categories = Object.keys(globalSummary.value.categoryMap);
+        const data = Object.values(globalSummary.value.categoryMap);
+        const colors = ['#6366f1', '#3b82f6', '#ec4899', '#f59e0b', '#10b981', '#64748b'];
+        return { 
+            labels: categories.length > 0 ? categories : ['未完了タスクなし'], 
+            datasets: [{ data: data.length > 0 ? data : [1], backgroundColor: data.length > 0 ? colors.slice(0, categories.length) : ['#e2e8f0'] }] 
+        };
+    }
+});
 
-// 期限切れ判定関数
-const isExpired = (dateString) => {
-    if (!dateString) return false;
-    const today = new Date().toISOString().split('T')[0];
-    return dateString < today;
+// --- アクション ---
+const onEndToday = () => {
+    router.patch(route('tasks.reorder'), {
+        tasks: todayDragTasks.value.map((task, index) => ({ id: task.id, sort_order: index }))
+    }, { preserveScroll: true });
 };
 
 const updateStatus = (task) => {
-    const nextStatus = (task.status + 1) % 3;
-    router.patch(route('tasks.update', task.id), {
-        status: nextStatus,
-    });
+    router.patch(route('tasks.update', task.id), { status: (task.status + 1) % 3 });
 };
 
 const deleteTask = (taskId) => {
-    if (confirm('本当にこのタスクを削除しますか？')) {
-        router.delete(route('tasks.destroy', taskId));
-    }
-};
-
-// 【改善】金・銀・銅を廃止し、グレースケールで美しく差別化
-const getPriorityBadgeClass = (index) => {
-    if (index === 0) {
-        // 1番優先度が高いタスク：シックなチャコールで引き締める
-        return 'bg-slate-800 text-white border-transparent font-semibold shadow-sm';
-    }
-    if (index === 1 || index === 2) {
-        // 2, 3位：すっきりとしたダークグレー
-        return 'bg-slate-100 text-slate-700 border-slate-200 font-medium';
-    }
-    // 4位以降：控えめな極薄グレー
-    return 'bg-slate-50 text-slate-400 border-slate-100';
+    if (confirm('本当にこのタスクを削除しますか？')) router.delete(route('tasks.destroy', taskId));
 };
 </script>
 
 <template>
     <Head title="Dashboard" />
-
     <AuthenticatedLayout>
         <template #header>
             <div class="flex justify-between items-center">
                 <h2 class="font-semibold text-lg text-slate-800 leading-tight">Dashboard</h2>
-                <Link 
-                    :href="route('tasks.create')" 
-                    class="bg-slate-800 text-white px-4 py-2 rounded-md hover:bg-slate-700 transition text-sm font-medium"
-                >
-                    ＋ タスクを作成
-                </Link>
+                <Link :href="route('tasks.create')" class="bg-slate-800 text-white px-4 py-2 rounded-md hover:bg-slate-700 transition text-sm font-medium">＋ タスクを作成</Link>
             </div>
         </template>
 
         <div class="py-12 bg-slate-100/80 min-h-screen">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-                
-                <!-- 進捗状況サマリーエリア -->
-                <div class="mb-8">
-                    <!-- A. マイタスク一覧タブのとき：リスクと負荷の統計 -->
-                    <div v-if="activeTab === 'all'" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
-                            <span class="text-slate-400 text-xs font-medium">未完了の総タスク</span>
-                            <span class="text-xl font-bold text-slate-700 mt-1">{{ globalSummary.uncompletedCount }}</span>
-                        </div>
-                        <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
-                            <span class="text-rose-500 text-xs font-bold">⚠️ 期限切れ</span>
-                            <span class="text-xl font-bold text-rose-600 mt-1">{{ globalSummary.expiredCount }}</span>
-                        </div>
-                        <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
-                            <span class="text-amber-500 text-xs font-medium">⏳ 3日以内の期限</span>
-                            <span class="text-xl font-bold text-amber-600 mt-1">{{ globalSummary.upcomingCount }}</span>
-                        </div>
-                        
-                        <!-- 【改善】ドーナツグラフを廃止し、視認性の高いミニバーリストへ変更 -->
-                        <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col justify-center">
-                            <span class="text-slate-400 text-xs font-medium mb-2 text-center">未完了タスクの内訳</span>
-                            <div v-if="Object.keys(globalSummary.categoryMap).length === 0" class="text-xs text-slate-400 text-center py-2">
-                                未完了タスクなし
-                            </div>
-                            <div v-else class="space-y-1.5 max-h-[70px] overflow-y-auto pr-1">
-                                <div 
-                                    v-for="(count, cat) in globalSummary.categoryMap" 
-                                    :key="cat"
-                                    class="flex flex-col text-xs"
-                                >
-                                    <div class="flex justify-between text-[11px] text-slate-600 font-medium mb-0.5">
-                                        <span class="truncate max-w-[100px]">{{ cat }}</span>
-                                        <span>{{ count }}個</span>
-                                    </div>
-                                    <!-- 視覚的なボリュームを表すインジケーターバー -->
-                                    <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                        <div 
-                                            class="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
-                                            :style="{ width: `${(count / globalSummary.uncompletedCount) * 100}%` }"
-                                        ></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <TaskSummary :active-tab="activeTab" :global-summary="globalSummary" :today-summary="todaySummary" :chart-data="chartData" />
 
-                    <!-- B. 今日のタスクタブのとき：今日の消化率統計（こちらはドーナツが最適） -->
-                    <div v-if="activeTab === 'today'" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
-                            <span class="text-slate-400 text-xs font-medium">今日の総タスク</span>
-                            <span class="text-xl font-bold text-slate-700 mt-1">{{ todaySummary.total }}</span>
-                        </div>
-                        <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
-                            <span class="text-indigo-500 text-xs font-medium">今日の残り</span>
-                            <span class="text-xl font-bold text-indigo-600 mt-1">{{ todaySummary.remaining }}</span>
-                        </div>
-                        <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex flex-col items-center justify-center">
-                            <span class="text-emerald-500 text-xs font-medium">今日の完了</span>
-                            <span class="text-xl font-bold text-emerald-600 mt-1">{{ todaySummary.completed }}</span>
-                        </div>
-                        <div class="bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] rounded-lg border border-slate-200 flex items-center justify-center">
-                            <div class="relative w-20 h-20 flex items-center justify-center">
-                                <Doughnut 
-                                    :data="chartData" 
-                                    :options="{ 
-                                        maintainAspectRatio: false, 
-                                        cutout: '75%', 
-                                        plugins: { legend: { display: false }, tooltip: { enabled: false } } 
-                                    }" 
-                                />
-                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                    <span class="text-sm font-extrabold text-slate-800 leading-none">{{ todaySummary.percentage }}%</span>
-                                    <span class="text-[9px] text-slate-400 font-bold mt-0.5">消化</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <TaskTabs v-model:active-tab="activeTab" />
 
-                <!-- タブ切り替えボタン -->
-                <div class="flex border-b border-slate-200">
-                    <button 
-                        @click="activeTab = 'all'" 
-                        :class="activeTab === 'all' ? 'border-b-2 border-slate-800 text-slate-800' : 'text-slate-400 hover:text-slate-600'"
-                        class="px-6 py-2.5 font-medium text-sm transition"
-                    >
-                        マイタスク一覧
-                    </button>
-                    <button 
-                        @click="activeTab = 'today'" 
-                        :class="activeTab === 'today' ? 'border-b-2 border-slate-800 text-slate-800' : 'text-slate-400 hover:text-slate-600'"
-                        class="px-6 py-2.5 font-medium text-sm transition"
-                    >
-                        今日のタスク
-                    </button>
-                </div>
-
-                <!-- コンテンツ表示エリア -->
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-xl border border-slate-200/60">
-                    <div class="p-6 text-slate-900">
-
-                        <!-- 1. マイタスク一覧タブ -->
-                        <div v-if="activeTab === 'all'">
-                            <div class="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
-                                <h3 class="text-base font-bold text-slate-800">マイタスク一覧</h3>
-                                <div class="flex items-center gap-3">
-                                    <select v-model="sortBy" class="rounded-md border-slate-200 shadow-sm focus:border-slate-400 focus:ring-0 text-xs text-slate-600">
-                                        <option value="due_date">期限順</option>
-                                        <option value="title">タイトル順</option>
-                                    </select>
-                                    <input 
-                                        type="text" 
-                                        v-model="searchQuery" 
-                                        placeholder="タスクを検索..." 
-                                        class="rounded-md border-slate-200 shadow-sm focus:border-slate-400 focus:ring-0 text-xs placeholder-slate-400 text-slate-600"
-                                    >
-                                    <label class="flex items-center space-x-2 text-xs text-slate-500 cursor-pointer">
-                                        <input type="checkbox" v-model="hideCompleted" class="rounded border-slate-300 text-slate-800 focus:ring-0">
-                                        <span>完了タスクを非表示</span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div v-if="filteredTasks.length === 0" class="text-center py-12 text-slate-400">
-                                <p class="text-sm">該当するタスクはありません。</p>
-                            </div>
-                            
-                            <div class="space-y-3">
-                                <div 
-                                    v-for="task in filteredTasks" 
-                                    :key="task.id"
-                                    class="p-4 border rounded-lg transition duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4"
-                                    :class="getCardClass(task)"
-                                >
-                                    <div class="flex-1">
-                                        <div class="flex items-center gap-2 mb-1 flex-wrap">
-                                            <button 
-                                                @click="updateStatus(task)"
-                                                type="button"
-                                                class="px-2 py-0.5 text-[11px] font-semibold rounded-full border transition hover:opacity-80 focus:outline-none" 
-                                                :class="getStatusBadge(task.status).class"
-                                            >
-                                                {{ getStatusBadge(task.status).text }}
-                                            </button>
-                                            <span class="text-[11px] font-medium bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-200" :class="{ 'opacity-50': task.status === 2 }">
-                                                {{ task.category }}
-                                            </span>
-                                            <h4 class="text-sm font-bold text-slate-700" :class="{ 'line-through text-slate-400': task.status === 2 }">
-                                                {{ task.title }}
-                                            </h4>
-                                        </div>
-                                        <p v-if="task.description" class="text-xs mt-1 leading-relaxed" :class="task.status === 2 ? 'text-slate-300' : 'text-slate-500'">{{ task.description }}</p>
-                                    </div>
-                                    
-                                    <div class="flex items-center gap-4 justify-between md:justify-end">
-                                        <div v-if="task.due_date" class="text-xs" :class="isExpired(task.due_date) && task.status !== 2 ? 'text-rose-600 font-bold' : (isToday(task.due_date) ? 'text-slate-700 font-bold' : 'text-slate-400')">
-                                            <span class="font-medium">
-                                                {{ isExpired(task.due_date) && task.status !== 2 ? '期限切れ:' : '期限:' }}
-                                            </span> 
-                                            {{ task.due_date }} {{ isToday(task.due_date) ? '(今日)' : '' }}
-                                        </div>
-                                        <Link 
-                                            :href="route('tasks.edit', task.id)" 
-                                            class="text-xs text-slate-500 hover:text-slate-800 hover:underline transition"
-                                            :class="{ 'opacity-50': task.status === 2 }"
-                                        >
-                                            編集
-                                        </Link>
-                                        <button 
-                                            @click="deleteTask(task.id)" 
-                                            class="text-xs text-rose-500 hover:text-rose-700 hover:underline transition"
-                                            :class="{ 'opacity-50': task.status === 2 }"
-                                        >
-                                            削除
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 2. 今日のタスクタブ -->
-                        <div v-if="activeTab === 'today'">
-                            <div class="flex items-center justify-between mb-6">
-                                <h3 class="text-base font-bold text-slate-800">☀️ 今日のタスク</h3>
-                                <p class="text-[11px] text-slate-400">ドラッグして今日の優先順位を並び替えられます</p>
-                            </div>
-                            
-                            <div v-if="todayDragTasks.length === 0" class="text-center py-12 text-slate-400">
-                                今日のタスクはありません。
-                            </div>
-                                                        
-                            <draggable 
-                                v-else
-                                v-model="todayDragTasks" 
-                                item-key="id" 
-                                @end="onEndToday" 
-                                class="space-y-3"
-                            >
-                                <template #item="{ element: task, index }">
-                                    <div 
-                                        class="p-4 border rounded-lg transition duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-move"
-                                        :class="getCardClass(task)"
-                                    >
-                                        <div class="flex-1 flex items-start gap-4">
-                                            <!-- クールなモノトーンの優先順位バッジ -->
-                                            <div 
-                                                class="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-xs border shadow-sm"
-                                                :class="getPriorityBadgeClass(index)"
-                                            >
-                                                {{ index + 1 }}
-                                            </div>
-
-                                            <div class="flex-1">
-                                                <div class="flex items-center gap-2 mb-1 flex-wrap">
-                                                    <!-- ステータス切替ボタン -->
-                                                    <button 
-                                                        @click="updateStatus(task)"
-                                                        type="button"
-                                                        class="px-2 py-0.5 text-[11px] font-semibold rounded-full border transition hover:opacity-80 focus:outline-none" 
-                                                        :class="getStatusBadge(task.status).class"
-                                                    >
-                                                        {{ getStatusBadge(task.status).text }}
-                                                    </button>
-                                                    <!-- カテゴリ -->
-                                                    <span v-if="task.category" class="text-[11px] font-medium bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-200" :class="{ 'opacity-50': task.status === 2 }">
-                                                        {{ task.category }}
-                                                    </span>
-                                                    <!-- タイトル -->
-                                                    <h4 class="text-sm font-bold text-slate-700" :class="{ 'line-through text-slate-400': task.status === 2 }">
-                                                        {{ task.title }}
-                                                    </h4>
-                                                </div>
-                                                <p v-if="task.description" class="text-xs mt-1 leading-relaxed" :class="task.status === 2 ? 'text-slate-300' : 'text-slate-500'">{{ task.description }}</p>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- 各種操作エリア（期限バッジ ＆ 統合されたアイコンユニット） -->
-                                        <div class="flex items-center gap-4 justify-between md:justify-end border-t md:border-t-0 border-slate-100 pt-3 md:pt-0">
-                                            <!-- 🟢 【修正】動的な期限バッジ：期限切れならローズ枠、今日ならインディゴ枠に -->
-                                            <span 
-                                                :class="[
-                                                    'text-[11px] px-2 py-1 rounded whitespace-nowrap font-medium border',
-                                                    isExpired(task.due_date) && task.status !== 2
-                                                        ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                                        : isToday(task.due_date)
-                                                        ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                                        : 'bg-slate-50 text-slate-500 border-slate-200'
-                                                ]"
-                                            >
-                                                期限: {{ isToday(task.due_date) ? '今日' : (task.due_date || '未設定') }}
-                                            </span>
-                                            
-                                            <!-- 【統一済】アイコンアクションボタン群（角丸 rounded-full や余白、ホバー色を「近日中」と同一に同期） -->
-                                            <div class="flex items-center gap-1" :class="{ 'opacity-40': task.status === 2 }">
-                                                <!-- 編集ボタン（鉛筆） -->
-                                                <Link 
-                                                    :href="route('tasks.edit', task.id)" 
-                                                    class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-full hover:bg-slate-100 transition-all duration-150 inline-flex items-center justify-center"
-                                                    title="タスクを編集"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                    </svg>
-                                                </Link>
-
-                                                <!-- 削除ボタン（ゴミ箱） -->
-                                                <button 
-                                                    @click="deleteTask(task.id)" 
-                                                    class="p-1.5 text-slate-400 hover:text-rose-600 rounded-full hover:bg-rose-50 transition-all duration-150 inline-flex items-center justify-center"
-                                                    title="タスクを削除"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-                            </draggable>
-                            
-                            <!-- 近日中のタスク -->
-                            <div v-if="upcomingTasks.length > 0" class="mt-8 bg-slate-50 p-6 shadow-sm sm:rounded-xl border border-slate-200/60">
-                                <h3 class="text-sm font-bold text-slate-700 mb-4">⏳ 近日中のタスク（3日以内）</h3>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div 
-                                        v-for="task in upcomingTasks" 
-                                        :key="task.id" 
-                                        :class="[
-                                            'p-4 rounded-lg border flex flex-col justify-between transition-all duration-200', 
-                                            getCardClass(task)
-                                        ]"
-                                    >
-                                        <!-- 上段：タイトルとステータス変更ボタン -->
-                                        <div class="flex items-start justify-between gap-2 mb-3">
-                                            <div class="flex flex-col min-w-0">
-                                                <span class="font-bold text-sm text-slate-800 truncate" :title="task.title">
-                                                    {{ task.title }}
-                                                </span>
-                                                <span v-if="task.category" class="text-[10px] text-slate-400 mt-0.5">#{{ task.category }}</span>
-                                            </div>
-                                            <!-- クリックでステータスが切り替わるインタラクティブバッジ -->
-                                            <button 
-                                                @click="updateStatus(task)"
-                                                :class="['px-2.5 py-1 rounded-full text-xs border transition-colors duration-150 whitespace-nowrap', getStatusBadge(task.status).class]"
-                                            >
-                                                {{ getStatusBadge(task.status).text }}
-                                            </button>
-                                        </div>
-
-                                        <!-- 下段：期限バッジ ＆ アクション（編集・削除） -->
-                                        <div class="flex items-center justify-between text-xs border-t border-slate-100 pt-3">
-                                            <div>
-                                                <!-- 期限表示（今日なら青、期限切れなら赤、それ以外は通常グレー） -->
-                                                <span 
-                                                    :class="[
-                                                        'text-[10px] px-2 py-0.5 rounded font-medium border whitespace-nowrap',
-                                                        isExpired(task.due_date) && task.status !== 2
-                                                            ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                                            : isToday(task.due_date)
-                                                            ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                                            : 'bg-slate-50 text-slate-500 border-slate-200'
-                                                    ]"
-                                                >
-                                                    期限: {{ task.due_date || '未設定' }}
-                                                </span>
-                                            </div>
-
-                                            <!-- アクションボタン群（編集・削除）：統一されたインタラクションスタイル -->
-                                            <div class="flex items-center gap-1">
-                                                <!-- 編集ボタン -->
-                                                <Link 
-                                                    :href="route('tasks.edit', task.id)" 
-                                                    class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-full transition-all duration-150 inline-flex items-center justify-center"
-                                                    title="タスクを編集"
-                                                >
-                                                    <!-- 鉛筆アイコン（SVG） -->
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                    </svg>
-                                                </Link>
-
-                                                <!-- 削除ボタン -->
-                                                <button 
-                                                    @click="deleteTask(task.id)" 
-                                                    class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-all duration-150 inline-flex items-center justify-center"
-                                                    title="タスクを削除"
-                                                >
-                                                    <!-- ゴミ箱アイコン（SVG） -->
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-xl border border-slate-200/60 p-6">
+                    <TaskList v-if="activeTab === 'overdue'" :tasks="overdueTasks" @update-status="updateStatus" @delete-task="deleteTask" />
+                    <TaskList v-if="activeTab === 'all'" :tasks="filteredTasks" @update-status="updateStatus" @delete-task="deleteTask" />
+                    <TaskList 
+                        v-if="activeTab === 'today'" 
+                        v-model:tasks="todayDragTasks"
+                        :is-draggable="true" 
+                        :show-priority="true"
+                        @reorder="onEndToday"
+                        @update-status="updateStatus" 
+                        @delete-task="deleteTask" 
+                    />
                 </div>
             </div>
         </div>
@@ -4290,7 +4147,7 @@ Artisan::command('inspire', function () {
 <?php
 
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\TaskController;
+use App\Http\Controllers\TaskController; 
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -4304,24 +4161,25 @@ Route::get('/', function () {
     ]);
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/dashboard', [TaskController::class, 'index'])->name('dashboard');
-    Route::get('/tasks/create', [TaskController::class, 'create'])->name('tasks.create');
-    Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
-    
-    // 他のルートより上に配置し、確実にマッチングさせる
-    Route::patch('/tasks/reorder', [TaskController::class, 'reorder'])->name('tasks.reorder');
-    
-    Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
-    Route::get('/tasks/{task}/edit', [TaskController::class, 'edit'])->name('tasks.edit');
-    Route::match(['put', 'patch'], '/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
-});
+// ダッシュボードを表示するルート
+Route::get('/dashboard', [TaskController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    // プロフィール関連
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-    Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
+
+    // タスク関連のルーティング
+    Route::get('/tasks/create', [TaskController::class, 'create'])->name('tasks.create');
+    Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
+    
+    // ★以下を追加しました
+    Route::get('/tasks/{task}/edit', [TaskController::class, 'edit'])->name('tasks.edit');
+    
+    Route::patch('/tasks/reorder', [TaskController::class, 'reorder'])->name('tasks.reorder');
+    Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
+    Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
 });
 
 require __DIR__.'/auth.php';

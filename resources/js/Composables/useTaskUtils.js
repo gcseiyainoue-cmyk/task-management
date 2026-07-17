@@ -10,6 +10,22 @@ export function useTaskUtils() {
         return dateString < today;
     };
 
+    // 【追加】期限の状態を返す関数
+    const getDueDateStatus = (dueDate) => {
+        if (!dueDate) return 'normal';
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const due = new Date(dueDate);
+        due.setHours(0, 0, 0, 0);
+        
+        const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+
+        if (diffDays <= 0) return 'expired'; // 今日・期限切れ
+        if (diffDays <= 3) return 'warning'; // 3日以内
+        return 'normal';
+    };
+
     const getStatusBadge = (status) => {
         const statuses = {
             0: { text: '⚪ 未着手', class: 'bg-slate-100/70 text-slate-600 border-slate-200' },
@@ -38,5 +54,5 @@ export function useTaskUtils() {
         return 'bg-slate-50 text-slate-400 border-slate-100';
     };
 
-    return { isToday, isExpired, getStatusBadge, getCardClass, getPriorityBadgeClass };
+    return { isToday, isExpired, getDueDateStatus, getStatusBadge, getCardClass, getPriorityBadgeClass };
 }
