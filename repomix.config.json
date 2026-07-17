@@ -1,0 +1,22 @@
+{
+  "include": [
+    "app/**/*",
+    "resources/**/*",
+    "routes/**/*",
+    "database/**/*",
+    "composer.json",
+    "package.json",
+    "vite.config.js"
+  ],
+  "ignore": {
+    "useGitIgnore": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/vendor/**",
+      "**/storage/**",
+      "**/bootstrap/cache/**",
+      "**/*.log",
+      "**/*.lock"
+    ]
+  }
+}
