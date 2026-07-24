@@ -1,19 +1,34 @@
 <script setup>
+/**
+ * =====================================================================================
+ * 【ファイル名】 TaskFormModal.vue
+ * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーションコンポーネント / タスク新規作成・スマート一括入力モーダル）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * 単体タスクを詳細に設定して作成する「通常モード」と、改行区切りで自由なテキストから
+ * 短縮記号（[wo], [hi]など）や自然言語の期限を解析して一括生成する「スマート一括入力モード」の
+ * 2つのモードを切り替えて利用できるマルチパーパスなモーダルコンポーネントです。
+ * 通常モードではInertia.jsのフォームオブジェクト（form）を受け取りデータバインディングとバリデーションエラー表示を行い、
+ * スマート一括入力では専用のComposable（useSmartTaskCreate）にロジックを委譲してクリーンな関心の分離を実現しています。
+ */
+
 import { ref } from 'vue';
 import { categoryTree } from '@/Constants/task';
 import { useSmartTaskCreate } from '@/Composables/useSmartTaskCreate';
 
+// --- プロパティの定義（モーダル表示状態、通常作成用 Inertia form オブジェクト） ---
 const props = defineProps({
     isOpen: Boolean,
-    form: Object, // 通常作成用 Inertia form object
+    form: Object, 
 });
 
+// --- イベント定義（モーダル閉鎖およびフォーム送信の通知） ---
 const emit = defineEmits(['close', 'submit']);
 
-// モード管理 ('single': 通常作成, 'smart': スマート一括入力)
+// --- モード管理 ('single': 通常作成, 'smart': スマート一括入力) ---
 const mode = ref('single');
 
-// スマート一括入力のロジックをComposableから取得
+// --- スマート一括入力のロジックをComposableから取得 ---
 const {
     smartText,
     isProcessing,
@@ -22,18 +37,22 @@ const {
 </script>
 
 <template>
+    <!-- 【トランジション・背景オーバーレイ】最前面（z-50）に配置し、背景クリックでモーダルを閉じる -->
     <Transition name="slide-up">
         <div v-if="isOpen" @click="$emit('close')" class="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-end sm:items-center sm:justify-center sm:p-4">
+            <!-- モーダル本体（スマホでは下部スライドイン、PCでは中央配置） -->
             <div @click.stop class="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl space-y-5 border-t sm:border border-slate-200 max-h-[90vh] flex flex-col">
                 
+                <!-- スマホ用ドラッグインジケーター（上部バー） -->
                 <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden shrink-0"></div>
 
-                <!-- ヘッダー ＆ タブ切り替え -->
+                <!-- ─── ヘッダー ＆ モード切り替えタブ ─── -->
                 <div class="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
                     <span class="text-sm font-bold text-slate-900 flex items-center gap-2">
                         <span>✨</span> タスクを追加
                     </span>
 
+                    <!-- タブ切替ボタン群 -->
                     <div class="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold">
                         <button 
                             @click="mode = 'single'" 
@@ -52,9 +71,9 @@ const {
                     <button @click="$emit('close')" class="text-slate-400 hover:text-slate-900 font-bold text-xs p-1 cursor-pointer">✕</button>
                 </div>
 
-                <!-- 通常作成モード -->
+                <!-- ─── 通常作成モードフォーム ─── -->
                 <form v-if="mode === 'single'" @submit.prevent="$emit('submit')" class="space-y-4 overflow-y-auto pr-1 pb-2">
-                    <!-- タイトル -->
+                    <!-- タスク名入力 -->
                     <div class="space-y-1.5">
                         <label class="text-[11px] font-bold text-slate-500">タスク名</label>
                         <input 
@@ -99,7 +118,7 @@ const {
                         </div>
                     </div>
 
-                    <!-- 期限日 & 重要度 -->
+                    <!-- 期限日 & 重要度選択 -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="space-y-1.5">
                             <label class="text-[11px] font-bold text-slate-500">期限日</label>
@@ -123,6 +142,7 @@ const {
                         </div>
                     </div>
 
+                    <!-- 送信ボタン -->
                     <div class="pt-2">
                         <button 
                             type="submit" 
@@ -134,7 +154,7 @@ const {
                     </div>
                 </form>
 
-                <!-- スマート一括入力モード -->
+                <!-- ─── スマート一括入力モード ─── -->
                 <div v-else class="space-y-4 overflow-y-auto pr-1 pb-2">
                     <div class="space-y-1">
                         <label class="text-[11px] font-bold text-slate-500">今日やることを自由に書き出す</label>
@@ -167,6 +187,7 @@ const {
                         </div>
                     </div>
 
+                    <!-- テキストエリア -->
                     <textarea 
                         v-model="smartText"
                         rows="6"
@@ -178,6 +199,7 @@ const {
                         class="w-full text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-900 shadow-inner focus:bg-white transition resize-none leading-relaxed"
                     ></textarea>
 
+                    <!-- 一括生成ボタン -->
                     <div class="pt-2">
                         <button 
                             @click="handleSmartSubmit"
