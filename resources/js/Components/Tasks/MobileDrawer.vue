@@ -1,22 +1,38 @@
 <script setup>
+/**
+ * =====================================================================================
+ * 【ファイル名】 MobileSidebar.vue (※想定されるファイル名)
+ * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーションコンポーネント / モバイル用サイドバー・ドロワー）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * 先述のデスクトップ用サイドバー（TaskSidebar.vue）とほぼ同等のビュー絞り込みおよびカテゴリ別フィルタリング機能を提供しつつ、
+ * モバイル・タブレットの狭小画面（ドロワーやモーダル内）での使用に特化したレイアウト（グリッド配置やタッチ操作用の拡大サイズ・active:scale-95等）を実装しています。
+ * 各リンククリック時には `@click="$emit('close')"` を経由して親のモーダル/ドロワーを即座に閉じる設計になっており、
+ * スムーズな画面遷移とUXの向上を実現しています。
+ */
+
 import { Link } from '@inertiajs/vue3';
 import { categoryTree } from '@/Constants/task';
 
+// --- プロパティの定義（全タスクデータ、現在選択中のカテゴリ、本日の日付文字列） ---
 defineProps({
     tasks: Array,
     currentCategory: String,
     todayStr: String,
 });
 
+// --- イベント定義（ナビゲーション選択時に親コンポーネントへドロワー閉鎖を通知） ---
 defineEmits(['close']);
 </script>
 
 <template>
+    <!-- 【モバイルドロワーレイアウト】縦方向のスペース効率を高め、タッチ操作しやすいパディングやグリッドを適用 -->
     <div class="space-y-4 pb-4">
-        <!-- クイックビュー -->
+        <!-- ─── クイックビュー（時間・フィルターによる絞り込み / グリッド形式） ─── -->
         <div class="space-y-1.5">
             <div class="text-[10px] font-bold text-slate-400 px-1 uppercase tracking-wider">ビュー</div>
             <div class="grid grid-cols-2 gap-1.5">
+                <!-- 「今日」のタスクに絞り込むリンク -->
                 <Link 
                     @click="$emit('close')"
                     :href="route('dashboard', { category: 'today' })" 
@@ -29,6 +45,7 @@ defineEmits(['close']);
                     </span>
                 </Link>
 
+                <!-- 「すべてのタスク」を表示するリンク -->
                 <Link 
                     @click="$emit('close')"
                     :href="route('dashboard', { category: 'all' })" 
@@ -43,10 +60,11 @@ defineEmits(['close']);
             </div>
         </div>
 
-        <!-- カテゴリリスト -->
+        <!-- ─── カテゴリリストセクション ─── -->
         <div class="space-y-1.5">
             <div class="text-[10px] font-bold text-slate-400 px-1 uppercase tracking-wider">カテゴリ</div>
             <div class="space-y-1.5">
+                <!-- 定数（categoryTree）をループし、インボックス（未分類）以外の各カテゴリリンクを動的生成 -->
                 <Link 
                     v-for="(val, key) in categoryTree" 
                     :key="key"
@@ -64,7 +82,7 @@ defineEmits(['close']);
                     </span>
                 </Link>
 
-                <!-- 改善案: 「未分類」をカテゴリ最下部に区切り線付きで配置 -->
+                <!-- 「未分類（inbox）」をカテゴリリスト最下部に区切り線付きで配置 -->
                 <div class="pt-1.5 mt-1.5 border-t border-slate-100">
                     <Link 
                         @click="$emit('close')"
