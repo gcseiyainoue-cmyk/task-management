@@ -34,7 +34,7 @@ defineEmits(['close']);
         <div class="space-y-1.5">
             <div class="text-[10px] font-bold text-slate-400 px-1 uppercase tracking-wider">ビュー</div>
             <div class="grid grid-cols-2 gap-1.5">
-                <!-- 「未分類」へのクイックリンク -->
+                <!-- 「未分類」へのクイックリンク（カテゴリとして処理） -->
                 <Link 
                     @click="$emit('close')"
                     :href="route('dashboard', { category: 'inbox' })" 
@@ -50,7 +50,7 @@ defineEmits(['close']);
                 <!-- 「今日」へのクイックリンク -->
                 <Link 
                     @click="$emit('close')"
-                    :href="route('dashboard', { category: 'today' })" 
+                    :href="route('dashboard', { view: 'today' })" 
                     :class="['p-2.5 rounded-2xl text-xs font-semibold transition flex flex-col items-center justify-center gap-0.5 text-center active:scale-95 border cursor-pointer', currentCategory === 'today' ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80']"
                 >
                     <span class="text-lg">📅</span>
@@ -63,7 +63,7 @@ defineEmits(['close']);
                 <!-- 「すべてのタスク」へのリンク（グリッドの2カラムをフル活用） -->
                 <Link 
                     @click="$emit('close')"
-                    :href="route('dashboard', { category: 'all' })" 
+                    :href="route('dashboard', { view: 'all' })" 
                     :class="['col-span-2 p-2.5 rounded-2xl text-xs font-semibold transition flex items-center justify-between px-3.5 active:scale-95 border cursor-pointer', currentCategory === 'all' ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80']"
                 >
                     <span class="flex items-center gap-2 text-xs font-bold"><span>📂</span> すべてのタスク</span>
