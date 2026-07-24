@@ -1,198 +1,137 @@
 <script setup>
 import { ref } from 'vue';
-import ApplicationLogo from '@/Components/ApplicationLogo.vue';
-import Dropdown from '@/Components/Dropdown.vue';
-import DropdownLink from '@/Components/DropdownLink.vue';
-import NavLink from '@/Components/NavLink.vue';
-import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import { Link } from '@inertiajs/vue3';
 
 const showingNavigationDropdown = ref(false);
 </script>
 
 <template>
-    <div>
-        <div class="min-h-screen bg-gray-100">
-            <nav
-                class="border-b border-gray-100 bg-white"
-            >
-                <!-- Primary Navigation Menu -->
-                <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <div class="flex h-16 justify-between">
-                        <div class="flex">
-                            <!-- Logo -->
-                            <div class="flex shrink-0 items-center">
-                                <Link :href="route('dashboard')">
-                                    <ApplicationLogo
-                                        class="block h-9 w-auto fill-current text-gray-800"
-                                    />
+    <div class="min-h-screen bg-slate-50/50 text-slate-900 font-sans antialiased selection:bg-slate-900 selection:text-white">
+        
+        <!-- ▼ ナビゲーションとページヘッダーをひとまとめにして固定するラッパー -->
+        <div class="sticky top-0 z-40">
+            <!-- ナビゲーションバー -->
+            <nav class="bg-white/85 backdrop-blur-md border-b border-slate-200/80">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="flex justify-between h-16">
+                        <div class="flex items-center gap-6">
+                            <!-- ロゴ / アプリ名 -->
+                            <div class="shrink-0 flex items-center">
+                                <Link :href="route('dashboard')" class="font-bold text-base text-slate-900 tracking-tight flex items-center gap-2">
+                                    <span class="text-xl">🧩</span> 
+                                    <span>Tasks</span>
                                 </Link>
                             </div>
 
-                            <!-- Navigation Links -->
-                            <div
-                                class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex"
-                            >
-                                <NavLink
-                                    :href="route('dashboard')"
-                                    :active="route().current('dashboard')"
+                            <!-- ナビゲーションリンク（PC用） -->
+                            <div class="hidden sm:flex sm:items-center sm:gap-1.5">
+                                <Link 
+                                    :href="route('dashboard')" 
+                                    :class="[
+                                        'px-3.5 py-2 rounded-xl text-xs font-semibold transition',
+                                        route().current('dashboard*') ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                                    ]"
                                 >
-                                    Dashboard
-                                </NavLink>
+                                    ダッシュボード
+                                </Link>
+                                <Link 
+                                    :href="route('tasks.guide')" 
+                                    :class="[
+                                        'px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5',
+                                        route().current('tasks.guide') ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                                    ]"
+                                >
+                                    <span>📖</span> 使い方ガイド
+                                </Link>
+                                <!-- ▼ PC用に追加したコード・UIガイドへのリンク -->
+                                <Link 
+                                    :href="route('dashboard.code-guide')" 
+                                    :class="[
+                                        'px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5',
+                                        route().current('dashboard.code-guide') ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                                    ]"
+                                >
+                                    <span>🗺️</span> コード・UIガイド
+                                </Link>
                             </div>
                         </div>
 
-                        <div class="hidden sm:ms-6 sm:flex sm:items-center">
-                            <!-- Settings Dropdown -->
-                            <div class="relative ms-3">
-                                <Dropdown align="right" width="48">
-                                    <template #trigger>
-                                        <span class="inline-flex rounded-md">
-                                            <button
-                                                type="button"
-                                                class="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none"
-                                            >
-                                                {{ $page.props.auth.user.name }}
-
-                                                <svg
-                                                    class="-me-0.5 ms-2 h-4 w-4"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    viewBox="0 0 20 20"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        fill-rule="evenodd"
-                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                        clip-rule="evenodd"
-                                                    />
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    </template>
-
-                                    <template #content>
-                                        <DropdownLink
-                                            :href="route('profile.edit')"
-                                        >
-                                            Profile
-                                        </DropdownLink>
-                                        <DropdownLink
-                                            :href="route('logout')"
-                                            method="post"
-                                            as="button"
-                                        >
-                                            Log Out
-                                        </DropdownLink>
-                                    </template>
-                                </Dropdown>
+                        <!-- ユーザー情報・ログアウト -->
+                        <div class="hidden sm:flex sm:items-center sm:gap-3">
+                            <div class="text-xs font-semibold text-slate-700 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/60">
+                                {{ $page.props.auth.user.name }} さん
                             </div>
+                            <Link 
+                                :href="route('logout')" 
+                                method="post" 
+                                as="button" 
+                                class="text-xs font-semibold text-slate-600 hover:text-rose-600 px-3.5 py-2 rounded-xl hover:bg-rose-50 transition"
+                            >
+                                ログアウト
+                            </Link>
                         </div>
 
-                        <!-- Hamburger -->
-                        <div class="-me-2 flex items-center sm:hidden">
-                            <button
-                                @click="
-                                    showingNavigationDropdown =
-                                        !showingNavigationDropdown
-                                "
-                                class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition duration-150 ease-in-out hover:bg-gray-100 hover:text-gray-500 focus:bg-gray-100 focus:text-gray-500 focus:outline-none"
+                        <!-- ハンバーガーメニュー（スマホ用） -->
+                        <div class="-mr-2 flex items-center sm:hidden">
+                            <button 
+                                @click="showingNavigationDropdown = !showingNavigationDropdown"
+                                class="inline-flex items-center justify-center p-2 rounded-xl text-slate-400 hover:text-slate-500 hover:bg-slate-100 focus:outline-none transition"
                             >
-                                <svg
-                                    class="h-6 w-6"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        :class="{
-                                            hidden: showingNavigationDropdown,
-                                            'inline-flex':
-                                                !showingNavigationDropdown,
-                                        }"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M4 6h16M4 12h16M4 18h16"
-                                    />
-                                    <path
-                                        :class="{
-                                            hidden: !showingNavigationDropdown,
-                                            'inline-flex':
-                                                showingNavigationDropdown,
-                                        }"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M6 18L18 6M6 6l12 12"
-                                    />
+                                <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                                    <path :class="{'hidden': showingNavigationDropdown, 'inline-flex': !showingNavigationDropdown}" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                                    <path :class="{'hidden': !showingNavigationDropdown, 'inline-flex': showingNavigationDropdown}" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Responsive Navigation Menu -->
-                <div
-                    :class="{
-                        block: showingNavigationDropdown,
-                        hidden: !showingNavigationDropdown,
-                    }"
-                    class="sm:hidden"
-                >
-                    <div class="space-y-1 pb-3 pt-2">
-                        <ResponsiveNavLink
-                            :href="route('dashboard')"
-                            :active="route().current('dashboard')"
-                        >
-                            Dashboard
-                        </ResponsiveNavLink>
-                    </div>
-
-                    <!-- Responsive Settings Options -->
-                    <div
-                        class="border-t border-gray-200 pb-1 pt-4"
+                <!-- スマホ用ドロップダウンメニュー -->
+                <div :class="{'block': showingNavigationDropdown, 'hidden': !showingNavigationDropdown}" class="sm:hidden border-t border-slate-200/80 bg-white px-4 pt-3 pb-4 space-y-2">
+                    <Link 
+                        :href="route('dashboard')" 
+                        class="block px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
                     >
-                        <div class="px-4">
-                            <div
-                                class="text-base font-medium text-gray-800"
-                            >
-                                {{ $page.props.auth.user.name }}
-                            </div>
-                            <div class="text-sm font-medium text-gray-500">
-                                {{ $page.props.auth.user.email }}
-                            </div>
-                        </div>
-
-                        <div class="mt-3 space-y-1">
-                            <ResponsiveNavLink :href="route('profile.edit')">
-                                Profile
-                            </ResponsiveNavLink>
-                            <ResponsiveNavLink
-                                :href="route('logout')"
-                                method="post"
-                                as="button"
-                            >
-                                Log Out
-                            </ResponsiveNavLink>
-                        </div>
+                        ダッシュボード
+                    </Link>
+                    <Link 
+                        :href="route('tasks.guide')" 
+                        class="block px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition flex items-center gap-2"
+                    >
+                        <span>📖</span> 使い方ガイド
+                    </Link>
+                    <Link 
+                        :href="route('dashboard.code-guide')" 
+                        class="block px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition flex items-center gap-2"
+                    >
+                        <span>🗺️</span> コード・UIガイドを見る
+                    </Link>
+                    <div class="pt-3 border-t border-slate-100 flex items-center justify-between px-3">
+                        <span class="text-xs font-semibold text-slate-700">{{ $page.props.auth.user.name }} さん</span>
+                        <Link 
+                            :href="route('logout')" 
+                            method="post" 
+                            as="button" 
+                            class="text-xs font-semibold text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded-xl transition"
+                        >
+                            ログアウト
+                        </Link>
                     </div>
                 </div>
             </nav>
 
-            <!-- Page Heading -->
-            <header
-                class="bg-white shadow"
-                v-if="$slots.header"
-            >
-                <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            <!-- ページヘッダー -->
+            <header v-if="$slots.header" class="bg-white/85 backdrop-blur-md border-b border-slate-200/60 py-4">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
-
-            <!-- Page Content -->
-            <main>
-                <slot />
-            </main>
         </div>
+        <!-- ▲ 固定ラッパーここまで -->
+
+        <!-- メインコンテンツ -->
+        <main>
+            <slot />
+        </main>
     </div>
 </template>

@@ -10,11 +10,11 @@ return new class extends Migration
     {
         Schema::create('tasks', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->string('title');
-            $table->text('description')->nullable();
-            $table->tinyInteger('status')->default(0); // 0:未着手, 1:進行中, 2:完了
+            $table->boolean('is_completed')->default(false);
             $table->date('due_date')->nullable();
+            $table->string('category')->default('private'); // 'work' または 'private'
+            $table->string('priority')->default('medium');   // 'high', 'medium', 'low'
             $table->timestamps();
         });
     }

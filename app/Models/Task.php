@@ -11,21 +11,14 @@ class Task extends Model
 
     protected $fillable = [
         'title',
-        'description',
-        'status',
+        'is_completed',
         'due_date',
         'category',
-        'sort_order',
+        'sub_category',
+        'priority',
     ];
 
-    // ステータスの定数定義
-    const STATUS_TODO = 0;        // 未着手
-    const STATUS_IN_PROGRESS = 1; // 進行中
-    const STATUS_COMPLETED = 2;   // 完了
-
-    // ユーザーへのリレーション
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
+    protected $casts = [
+        'is_completed' => 'boolean',
+    ];
 }

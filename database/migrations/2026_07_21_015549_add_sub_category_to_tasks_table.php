@@ -6,17 +6,17 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public function up()
+    public function up(): void
     {
         Schema::table('tasks', function (Blueprint $table) {
-            $table->integer('sort_order')->default(0);
+            $table->string('sub_category')->nullable()->after('category');
         });
     }
 
-    public function down()
+    public function down(): void
     {
         Schema::table('tasks', function (Blueprint $table) {
-            $table->dropColumn('sort_order');
+            $table->dropColumn('sub_category');
         });
     }
 };

@@ -1,3 +1,28 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes flashHighlight {
+    0%, 100% { background-color: rgba(251, 191, 36, 0.2); }
+    50% { background-color: rgba(251, 191, 36, 0.6); }
+}
+
+.task-highlight {
+    animation: flashHighlight 1.5s ease-in-out infinite;
+}
+
+.task-solid-highlight {
+    background-color: rgba(251, 191, 36, 0.15);
+}
+
+/* モーダル用下からのスライドアニメーション */
+.slide-up-enter-active,
+.slide-up-leave-active {
+    transition: all 0.25s ease-out;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+    opacity: 0;
+    transform: translateY(20px);
+}

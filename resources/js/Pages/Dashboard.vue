@@ -1,371 +1,491 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useForm, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-
-import { useTaskUtils } from '@/Composables/useTaskUtils';
-import TaskSummary from '@/Components/TaskSummary.vue';
-import TaskList from '@/Components/TaskList.vue';
-import TaskTabs from '@/Components/TaskTabs.vue';
-import TaskEditModal from '@/Components/TaskEditModal.vue';
+import { Head } from '@inertiajs/vue3';
 
 const props = defineProps({
-    allTasks: Array,
-    todayTasks: Array,
-    overdueTasks: Array,
-    weeklyTasks: Array,
-    somedayTasks: Array,
-    completedTasks: Array,
+    tasks: Array,
 });
 
-const isEditModalOpen = ref(false);
-const editingTask = ref(null);
-
-const openEditModal = (task) => {
-    editingTask.value = task;
-    isEditModalOpen.value = true;
+// 可能な限り具体的かつ網羅的に拡充したカテゴリツリー
+const categoryTree = {
+    work: {
+        label: '仕事',
+        icon: '💼',
+        badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
+        items: [
+            { key: 'project', label: 'プロジェクト開発', icon: '💻' },
+            { key: 'meeting', label: 'ミーティング・面談', icon: '🤝' },
+            { key: 'task', label: '通常タスク・ルーチン', icon: '📝' },
+            { key: 'docs', label: '資料・レポート作成', icon: '📊' },
+            { key: 'client', label: '顧客対応・連絡', icon: '📞' },
+            { key: 'management', label: 'マネジメント・採用', icon: '👥' },
+        ]
+    },
+    private: {
+        label: 'プライベート',
+        icon: '🏠',
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
+        items: [
+            { key: 'shopping', label: '買い物・EC', icon: '🛒' },
+            { key: 'outing', label: 'お出かけ・旅行', icon: '🚗' },
+            { key: 'housework', label: '家事・掃除・洗濯', icon: '🧹' },
+            { key: 'cooking', label: '料理・食事', icon: '🍳' },
+            { key: 'hobby', label: '趣味・エンタメ', icon: '🎨' },
+            { key: 'family', label: '家族・用事', icon: '👨‍👩‍👧‍👦' },
+            { key: 'errands', label: '手続き・役所', icon: '🏛️' },
+        ]
+    },
+    study: {
+        label: '学習・自己投資',
+        icon: '📚',
+        badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+        items: [
+            { key: 'reading', label: '読書・インプット', icon: '📖' },
+            { key: 'coding', label: 'プログラミング・技術', icon: '⚡' },
+            { key: 'language', label: '語学・英語', icon: '🌐' },
+            { key: 'qualification', label: '資格試験・勉強', icon: '📝' },
+            { key: 'output', label: '記事執筆・発信', icon: '✍️' },
+        ]
+    },
+    health: {
+        label: 'ヘルスケア',
+        icon: '💪',
+        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100',
+        items: [
+            { key: 'workout', label: '筋トレ・運動', icon: '🏋️' },
+            { key: 'running', label: 'ランニング・散歩', icon: '🏃' },
+            { key: 'medical', label: '病院・通院・薬', icon: '🏥' },
+            { key: 'mental', label: 'メンタルケア・睡眠', icon: '🧘' },
+            { key: 'diet', label: '食事管理・栄養', icon: '🥗' },
+        ]
+    },
+    finance: {
+        label: 'ファイナンス',
+        icon: '💰',
+        badgeClass: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100',
+        items: [
+            { key: 'banking', label: '口座・振込・管理', icon: '💳' },
+            { key: 'investment', label: '資産運用・投資', icon: '📈' },
+            { key: 'tax', label: '税金・確定申告', icon: '🧾' },
+            { key: 'budget', label: '家計簿・固定費', icon: '📉' },
+        ]
+    }
 };
 
-const { isToday, isExpired } = useTaskUtils();
+const getSubCategoryMeta = (category, subCategoryKey) => {
+    const parent = categoryTree[category] || categoryTree.private;
+    const found = parent.items.find(i => i.key === subCategoryKey);
+    return found || parent.items[0];
+};
 
 const activeTab = ref('all');
-const hideCompleted = ref(false);
-const searchQuery = ref('');
-const sortBy = ref('due_date');
-const todayDragTasks = ref([...props.todayTasks]);
 
-watch(() => props.todayTasks, (newTasks) => {
-    todayDragTasks.value = [...newTasks].sort((a, b) => {
-        const aCompleted = a.status === 2;
-        const bCompleted = b.status === 2;
-        if (aCompleted && !bCompleted) return 1;
-        if (!aCompleted && bCompleted) return -1;
-        return 0;
-    });
-}, { deep: true, immediate: true });
-
-// --- 共通フィルタリングロジック ---
-const applyFilters = (tasks) => {
-    let result = [...tasks];
-    
-    if (hideCompleted.value) result = result.filter(t => t.status !== 2);
-    
-    if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase();
-        result = result.filter(t => 
-            t.title.toLowerCase().includes(query) || 
-            (t.description && t.description.toLowerCase().includes(query)) ||
-            (t.category && t.category.toLowerCase().includes(query))
-        );
-    }
-    
-    result.sort((a, b) => {
-        if (sortBy.value === 'due_date') return new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31');
-        if (sortBy.value === 'title') return a.title.localeCompare(b.title);
-        if (sortBy.value === 'category') return (a.category || '未分類').localeCompare(b.category || '未分類');
-        return 0;
-    });
-    
-    return result;
-};
-
-// --- 各タブのフィルタ済みタスク ---
-const filteredAll = computed(() => applyFilters(props.allTasks));
-const filteredToday = computed(() => applyFilters(todayDragTasks.value));
-const filteredOverdue = computed(() => applyFilters(props.overdueTasks));
-const filteredWeekly = computed(() => applyFilters(props.weeklyTasks));
-const filteredSomeday = computed(() => applyFilters(props.somedayTasks));
-const filteredCompleted = computed(() => applyFilters(props.completedTasks));
-
-// --- その他算出プロパティ ---
-const upcomingTasks = computed(() => {
-    const today = new Date();
-    const threeDaysLater = new Date();
-    threeDaysLater.setDate(today.getDate() + 3);
-    return props.allTasks.filter(task => {
-        if (!task.due_date || task.status === 2) return false;
-        const dueDate = new Date(task.due_date);
-        return dueDate > today && dueDate <= threeDaysLater;
-    });
+const form = useForm({
+    title: '',
+    due_date: new Date().toISOString().split('T')[0],
+    category: 'private',
+    sub_category: 'shopping',
+    priority: 'medium',
 });
 
-const globalSummary = computed(() => {
-    const activeTasks = props.allTasks.filter(t => t.status !== 2);
-    const categoryMap = {};
-    activeTasks.forEach(t => { categoryMap[t.category || '未分類'] = (categoryMap[t.category || '未分類'] || 0) + 1; });
-    return { 
-        uncompletedCount: activeTasks.length, 
-        expiredCount: activeTasks.filter(t => isExpired(t.due_date)).length, 
-        upcomingCount: upcomingTasks.value.length, 
-        categoryMap 
-    };
-});
+const todayStr = new Date().toISOString().split('T')[0];
 
-const todaySummary = computed(() => {
-    const total = todayDragTasks.value.length;
-    const completed = todayDragTasks.value.filter(t => t.status === 2).length;
-    return { total, completed, remaining: total - completed, percentage: total > 0 ? Math.round((completed / total) * 100) : 0 };
-});
-
-const chartData = computed(() => {
-    if (activeTab.value === 'today') {
-        return { labels: ['完了', '残り'], datasets: [{ data: [todaySummary.value.completed, todaySummary.value.remaining], backgroundColor: ['#10b981', '#f1f5f9'] }] };
-    } else {
-        const categories = Object.keys(globalSummary.value.categoryMap);
-        const data = Object.values(globalSummary.value.categoryMap);
-        const colors = ['#6366f1', '#3b82f6', '#ec4899', '#f59e0b', '#10b981', '#64748b'];
-        return { 
-            labels: categories.length > 0 ? categories : ['未完了タスクなし'], 
-            datasets: [{ data: data.length > 0 ? data : [1], backgroundColor: data.length > 0 ? colors.slice(0, categories.length) : ['#e2e8f0'] }] 
-        };
-    }
-});
-
-// --- アクション ---
-const onEndToday = () => {
-    router.patch(route('tasks.reorder'), {
-        tasks: todayDragTasks.value.map((task, index) => ({ id: task.id, sort_order: index }))
-    }, { preserveScroll: true });
+const getTomorrowStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
 };
 
-const updateStatus = (task) => {
-    router.patch(route('tasks.update', task.id), { status: (task.status + 1) % 3 });
+const getThisWeekendStr = () => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() + (7 - day) % 7;
+    d.setDate(diff);
+    return d.toISOString().split('T')[0];
 };
 
-const deleteTask = (taskId) => {
-    if (confirm('本当にこのタスクを削除しますか？')) router.delete(route('tasks.destroy', taskId));
-};
-
-const selectedTasks = ref([]); // 選択されたIDを格納
-
-// 選択状態を切り替える関数
-const toggleSelect = (taskId) => {
-    const index = selectedTasks.value.indexOf(taskId);
-    if (index > -1) {
-        selectedTasks.value.splice(index, 1);
-    } else {
-        selectedTasks.value.push(taskId);
-    }
-};
-
-// 一括完了処理
-const bulkUpdateStatus = (status) => {
-    router.patch(route('tasks.bulk-update'), {
-        ids: selectedTasks.value,
-        status: status
-    }, {
-        onSuccess: () => selectedTasks.value = []
-    });
-};
-
-// 一括削除処理
-const bulkDelete = () => {
-    if (confirm(`${selectedTasks.value.length} 個のタスクを削除しますか？`)) {
-        router.delete(route('tasks.bulk-destroy'), {
-            data: { ids: selectedTasks.value },
-            onSuccess: () => selectedTasks.value = []
-        });
-    }
-};
-
-const newDueDate = ref('');
-
-const bulkUpdateDueDate = () => {
-    if (!newDueDate.value) return alert('日付を選択してください');
+const submitTask = () => {
+    if (!form.title.trim()) return;
     
-    router.patch(route('tasks.bulk-update'), {
-        ids: selectedTasks.value,
-        due_date: newDueDate.value
-    }, {
+    form.post(route('tasks.store'), {
+        preserveScroll: true,
         onSuccess: () => {
-            selectedTasks.value = [];
-            newDueDate.value = ''; // リセット
-        }
+            form.reset('title');
+            form.priority = 'medium';
+            form.due_date = todayStr;
+        },
     });
+};
+
+const toggleTask = (task) => {
+    router.patch(route('tasks.update', task.id), {
+        is_completed: !task.is_completed,
+    }, {
+        preserveScroll: true,
+    });
+};
+
+const activeMenu = ref({ taskId: null, type: null });
+
+const toggleMenu = (taskId, type, event) => {
+    event.stopPropagation();
+    if (activeMenu.value.taskId === taskId && activeMenu.value.type === type) {
+        activeMenu.value = { taskId: null, type: null };
+    } else {
+        activeMenu.value = { taskId, type };
+    }
+};
+
+const closeMenu = () => {
+    activeMenu.value = { taskId: null, type: null };
+};
+
+onMounted(() => {
+    window.addEventListener('click', closeMenu);
+});
+onUnmounted(() => {
+    window.removeEventListener('click', closeMenu);
+});
+
+const updateCategoryAndSub = (task, category, subCategory) => {
+    router.patch(route('tasks.update', task.id), { 
+        category, 
+        sub_category: subCategory 
+    }, { preserveScroll: true });
+    closeMenu();
+};
+
+const updatePriority = (task, priority) => {
+    router.patch(route('tasks.update', task.id), { priority }, { preserveScroll: true });
+    closeMenu();
+};
+
+const updateDueDate = (task, due_date) => {
+    router.patch(route('tasks.update', task.id), { due_date }, { preserveScroll: true });
+    closeMenu();
+};
+
+const deleteTask = (task) => {
+    router.delete(route('tasks.destroy', task.id), {
+        preserveScroll: true,
+    });
+};
+
+const editingTaskId = ref(null);
+const editingTitle = ref('');
+
+const startEdit = (task) => {
+    closeMenu();
+    editingTaskId.value = task.id;
+    editingTitle.value = task.title;
+};
+
+const saveEdit = (task) => {
+    if (!editingTitle.value.trim() || editingTitle.value === task.title) {
+        editingTaskId.value = null;
+        return;
+    }
+    router.patch(route('tasks.update', task.id), {
+        title: editingTitle.value,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => { editingTaskId.value = null; },
+    });
+};
+
+const cancelEdit = () => {
+    editingTaskId.value = null;
+};
+
+const todayTasks = computed(() => props.tasks.filter(t => t.due_date === todayStr));
+const completedTodayCount = computed(() => todayTasks.value.filter(t => t.is_completed).length);
+const totalTodayCount = computed(() => todayTasks.value.length);
+const progressPercent = computed(() => {
+    if (totalTodayCount.value === 0) return 0;
+    return Math.round((completedTodayCount.value / totalTodayCount.value) * 100);
+});
+const completedTotalCount = computed(() => props.tasks.filter(t => t.is_completed).length);
+
+const filteredTasks = computed(() => {
+    let result = [...props.tasks];
+
+    if (activeTab.value === 'today') {
+        result = result.filter(task => task.due_date === todayStr);
+        result.sort((a, b) => {
+            if (a.is_completed !== b.is_completed) {
+                return a.is_completed ? 1 : -1;
+            }
+            const priorityWeight = { high: 3, medium: 2, low: 1 };
+            const pDiff = (priorityWeight[b.priority] || 2) - (priorityWeight[a.priority] || 2);
+            if (pDiff !== 0) return pDiff;
+            return a.id - b.id;
+        });
+    } else if (activeTab.value !== 'all') {
+        result = result.filter(task => task.category === activeTab.value);
+    }
+
+    return result;
+});
+
+const priorityConfig = {
+    high: { 
+        label: '重要度: 高', 
+        badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200/90 font-semibold', 
+        cardAccent: 'border-l-4 border-l-rose-500' 
+    },
+    medium: { 
+        label: '重要度: 中', 
+        badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200/90', 
+        cardAccent: 'border-l-4 border-l-amber-400' 
+    },
+    low: { 
+        label: '重要度: 低', 
+        badgeClass: 'bg-slate-100 text-slate-600 border border-slate-200/90', 
+        cardAccent: 'border-l-4 border-l-slate-300' 
+    },
 };
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head title="Tasks" />
+
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex justify-between items-center">
-                <h2 class="font-semibold text-lg text-slate-800 leading-tight">Dashboard</h2>
-                <Link :href="route('tasks.create')" class="bg-slate-800 text-white px-4 py-2 rounded-md hover:bg-slate-700 transition text-sm font-medium">＋ タスクを作成</Link>
+            <div class="flex items-center justify-between">
+                <h2 class="font-semibold text-xl text-slate-900 tracking-tight flex items-center gap-2">
+                    <span>🧩</span> Tasks
+                </h2>
+                <div class="flex items-center gap-3 text-xs font-mono">
+                    <span class="bg-slate-100 border border-slate-200 px-3 py-1 rounded-full text-slate-700 font-semibold shadow-2xs">
+                        🎯 完了ピース: {{ completedTotalCount }}件
+                    </span>
+                </div>
             </div>
         </template>
 
-        <div class="py-12 bg-slate-100/80 min-h-screen">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-                <TaskSummary :active-tab="activeTab" :global-summary="globalSummary" :today-summary="todaySummary" :chart-data="chartData" />
-
-                <!-- コントロールエリア -->
-                <div class="flex flex-col gap-4 px-2">
-                    <div class="flex justify-between items-center">
-                        <TaskTabs v-model:active-tab="activeTab" />
-                        <div class="flex items-center gap-4">
-                            <label class="flex items-center text-sm text-slate-600 cursor-pointer hover:text-slate-800 transition">
-                                <input type="checkbox" v-model="hideCompleted" class="rounded border-slate-300 text-slate-800 shadow-sm focus:ring-slate-500 mr-2">
-                                完了済みを隠す
-                            </label>
-                            <select v-model="sortBy" class="text-sm border-slate-300 rounded-md focus:ring-slate-500 focus:border-slate-500">
-                                <option value="due_date">期限順</option>
-                                <option value="title">タイトル順</option>
-                                <option value="category">カテゴリ順</option>
-                            </select>
-                        </div>
+        <div class="py-10">
+            <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+                
+                <!-- 本日の達成状況 -->
+                <div class="mb-6 bg-white border border-slate-200/80 shadow-xs sm:rounded-2xl p-5 backdrop-blur-xl">
+                    <div class="flex items-center justify-between text-xs font-medium text-slate-600 mb-2">
+                        <span class="flex items-center gap-1.5 font-semibold text-slate-900">
+                            <span>📈</span> 本日のパズル完成度
+                        </span>
+                        <span class="font-mono">{{ completedTodayCount }} / {{ totalTodayCount }} 完了 ({{ progressPercent }}%)</span>
                     </div>
-                    <div class="flex gap-2">
-                        <input v-model="searchQuery" type="text" placeholder="タスクを検索..." class="flex-1 text-sm border-slate-300 rounded-md focus:ring-slate-500 focus:border-slate-500">
-                        <select v-model="searchQuery" class="text-sm border-slate-300 rounded-md focus:ring-slate-500 focus:border-slate-500 w-40">
-                            <option value="">全カテゴリ</option>
-                            <option v-for="category in Object.keys(globalSummary.categoryMap)" :key="category" :value="category">{{ category }}</option>
-                        </select>
+                    <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200/60">
+                        <div 
+                            class="bg-slate-900 h-full transition-all duration-500 rounded-full"
+                            :style="{ width: `${progressPercent}%` }"
+                        ></div>
                     </div>
                 </div>
 
-                <!-- 1. Grid構造でスムーズに展開・格納（レイアウトシフト防止） -->
-                <div 
-                    class="grid transition-all duration-300 ease-in-out"
-                    :class="selectedTasks.length > 0 ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'"
-                >
-                    <!-- 2. overflow-hidden がないと閉じた時に中身がはみ出てガタつきます -->
-                    <div class="overflow-hidden">
-                        <!-- 3. 余白(mb-4)はここ。閉じたときはこれも一緒に消えるため、不自然な隙間が残りません -->
-                        <div class="p-4 mb-4 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between flex-wrap gap-4">
-                            
-                            <span class="text-sm text-indigo-800 font-medium">
-                                {{ selectedTasks.length }} 個のタスクを選択中
-                            </span>
-                            
-                            <!-- 操作エリア：ボタンの強弱を明確に -->
-                            <div class="flex items-center gap-6 flex-wrap">
-                                
-                                <!-- 【主アクション】期限更新：目立つように -->
-                                <div class="flex items-center gap-2">
-                                    <input 
-                                        type="date" 
-                                        v-model="newDueDate" 
-                                        class="text-sm border-indigo-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                <!-- メインコンテナ -->
+                <div class="bg-white border border-slate-200/80 shadow-xs sm:rounded-2xl p-6 sm:p-8 backdrop-blur-xl">
+                    
+                    <!-- 高速追加フォーム -->
+                    <form @submit.prevent="submitTask" class="mb-6 flex gap-2">
+                        <input 
+                            type="text" 
+                            v-model="form.title" 
+                            placeholder="新しいピースを追加 (Enterで即座にはめ込む)..." 
+                            class="w-full bg-white border border-slate-200 focus:border-slate-900 focus:ring-slate-900 rounded-xl shadow-2xs text-sm text-slate-900 placeholder-slate-400 py-3.5 px-4 transition"
+                            autofocus
+                        />
+                        <button 
+                            type="submit" 
+                            :disabled="form.processing"
+                            class="bg-slate-900 text-white px-7 py-3.5 rounded-xl hover:bg-slate-800 active:bg-slate-950 text-sm font-medium transition shadow-sm cursor-pointer whitespace-nowrap"
+                        >
+                            ピース追加
+                        </button>
+                    </form>
+
+                    <!-- タブ切り替え（各カテゴリ対応） -->
+                    <div class="flex border-b border-slate-200/80 mb-6 overflow-x-auto scrollbar-none">
+                        <button @click="activeTab = 'all'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'all' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
+                            すべて ({{ tasks.length }})
+                        </button>
+                        <button @click="activeTab = 'work'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'work' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
+                            💼 仕事 ({{ tasks.filter(t => t.category === 'work').length }})
+                        </button>
+                        <button @click="activeTab = 'private'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'private' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
+                            🏠 プライベート ({{ tasks.filter(t => t.category === 'private').length }})
+                        </button>
+                        <button @click="activeTab = 'study'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'study' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
+                            📚 学習 ({{ tasks.filter(t => t.category === 'study').length }})
+                        </button>
+                        <button @click="activeTab = 'health'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'health' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
+                            💪 健康 ({{ tasks.filter(t => t.category === 'health').length }})
+                        </button>
+                        <button @click="activeTab = 'finance'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'finance' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
+                            💰 資産 ({{ tasks.filter(t => t.category === 'finance').length }})
+                        </button>
+                        <button @click="activeTab = 'today'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'today' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
+                            📅 今日 ({{ tasks.filter(t => t.due_date === todayStr).length }})
+                        </button>
+                    </div>
+
+                    <!-- 操作の案内 -->
+                    <div class="mb-6 text-xs text-slate-600 bg-slate-50 border border-slate-200/80 px-4 py-3 rounded-xl font-medium flex items-center gap-2">
+                        <span>💡</span>
+                        <span>各ピースのカテゴリをクリックすると、階層メニューから詳細な用途へ切り替えられます。</span>
+                    </div>
+
+                    <!-- タスク一覧 -->
+                    <div v-if="filteredTasks.length === 0" class="text-center py-20 text-slate-400 text-sm">
+                        タスクのピースはありません
+                    </div>
+
+                    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div 
+                            v-for="(task, index) in filteredTasks" 
+                            :key="task.id"
+                            :class="[
+                                'flex flex-col justify-between p-5 bg-white border border-slate-200/90 rounded-2xl transition-all duration-200 group shadow-2xs relative gap-4',
+                                priorityConfig[task.priority]?.cardAccent || 'border-l-4 border-l-slate-300',
+                                task.is_completed ? 'opacity-40 bg-slate-50/50' : 'hover:border-slate-300 hover:shadow-xs'
+                            ]"
+                        >
+                            <!-- 上段：アイコン、階層カテゴリ、タイトル、完了チェック -->
+                            <div class="flex items-start gap-3.5">
+                                <input 
+                                    type="checkbox" 
+                                    :checked="task.is_completed" 
+                                    @change="toggleTask(task)"
+                                    class="rounded-md border-slate-300 text-slate-900 focus:ring-slate-900 h-5 w-5 mt-0.5 cursor-pointer transition shrink-0"
+                                />
+
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1.5">
+                                        <button 
+                                            @click.stop="toggleMenu(task.id, 'category', $event)"
+                                            :class="['inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border transition cursor-pointer', categoryTree[task.category]?.badgeClass || categoryTree.private.badgeClass]"
+                                            title="クリックしてカテゴリ階層を切替"
+                                        >
+                                            <span>{{ categoryTree[task.category]?.icon || '🏠' }}</span>
+                                            <span>{{ categoryTree[task.category]?.label || 'プライベート' }}</span>
+                                            <span class="text-slate-400 font-normal">→</span>
+                                            <span>{{ getSubCategoryMeta(task.category, task.sub_category).icon }}</span>
+                                            <span>{{ getSubCategoryMeta(task.category, task.sub_category).label }}</span>
+                                        </button>
+
+                                        <span v-if="activeTab === 'today'" class="text-[10px] text-slate-400 font-mono">
+                                            #{{ index + 1 }}
+                                        </span>
+                                    </div>
+
+                                    <!-- 階層カテゴリ変更ポップオーバーメニュー（縦長になりすぎないよう高さ制限とスクロール対応） -->
+                                    <div v-if="activeMenu.taskId === task.id && activeMenu.type === 'category'" class="absolute left-10 mt-1 w-60 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-20 max-h-72 overflow-y-auto space-y-3">
+                                        <div v-for="(pVal, pKey) in categoryTree" :key="pKey" class="px-2">
+                                            <div class="text-[10px] font-bold text-slate-400 px-2 mb-1 flex items-center gap-1">
+                                                <span>{{ pVal.icon }}</span><span>{{ pVal.label }}</span>
+                                            </div>
+                                            <div class="space-y-0.5">
+                                                <button 
+                                                    v-for="sub in pVal.items" 
+                                                    :key="sub.key" 
+                                                    @click="updateCategoryAndSub(task, pKey, sub.key)" 
+                                                    class="w-full text-left px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2"
+                                                >
+                                                    <span>{{ sub.icon }}</span>
+                                                    <span>{{ sub.label }}</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 編集中の入力フィールド -->
+                                    <div v-if="editingTaskId === task.id" class="mt-1">
+                                        <input 
+                                            type="text" 
+                                            v-model="editingTitle" 
+                                            @keyup.enter="saveEdit(task)"
+                                            @keyup.esc="cancelEdit"
+                                            @blur="saveEdit(task)"
+                                            autofocus
+                                            class="w-full text-base font-semibold border-slate-900 focus:ring-slate-900 rounded-lg shadow-2xs py-1.5 px-3 text-slate-900"
+                                        />
+                                    </div>
+
+                                    <!-- 通常表示（タイトル） -->
+                                    <div 
+                                        v-else 
+                                        @click="startEdit(task)"
+                                        :class="['text-base font-semibold cursor-pointer leading-snug tracking-tight mt-1', task.is_completed ? 'line-through text-slate-400 font-normal' : 'text-slate-900 hover:text-slate-950']"
+                                        title="クリックしてタイトルを編集"
                                     >
-                                    <button 
-                                        @click="bulkUpdateDueDate" 
-                                        class="px-4 py-1.5 bg-indigo-600 text-white font-semibold text-sm rounded-md shadow-sm hover:bg-indigo-700 transition"
-                                    >
-                                        期限を更新
-                                    </button>
+                                        {{ task.title }}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 下段：ピースのパーツ（重要度、期限、削除） -->
+                            <div class="flex items-center justify-between pt-3.5 border-t border-slate-100 text-xs px-0.5">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <div class="relative">
+                                        <button 
+                                            @click.stop="toggleMenu(task.id, 'priority', $event)"
+                                            :class="['px-2.5 py-1.5 rounded-lg transition cursor-pointer font-medium flex items-center gap-1', priorityConfig[task.priority]?.badgeClass || priorityConfig.medium.badgeClass]"
+                                        >
+                                            <span>⚡</span>
+                                            <span>{{ priorityConfig[task.priority]?.label || '重要度: 中' }}</span>
+                                        </button>
+
+                                        <div v-if="activeMenu.taskId === task.id && activeMenu.type === 'priority'" class="absolute left-0 mt-1.5 w-32 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-20">
+                                            <button @click="updatePriority(task, 'high')" class="w-full text-left px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50 transition font-medium">⚡ 重要度: 高</button>
+                                            <button @click="updatePriority(task, 'medium')" class="w-full text-left px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-50 transition font-medium">⚡ 重要度: 中</button>
+                                            <button @click="updatePriority(task, 'low')" class="w-full text-left px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 transition font-medium">⚡ 重要度: 低</button>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <!-- 区切り線 -->
-                                <div class="h-8 w-px bg-indigo-200"></div>
+                                <div class="flex items-center gap-2">
+                                    <div class="relative">
+                                        <button 
+                                            @click.stop="toggleMenu(task.id, 'due', $event)"
+                                            :class="['border rounded-lg px-2.5 py-1.5 transition flex items-center gap-1 cursor-pointer font-medium', task.due_date === todayStr && !task.is_completed ? 'bg-slate-900 text-white border-slate-900 shadow-2xs' : 'bg-slate-50/80 border-slate-200 text-slate-700 hover:bg-slate-100']"
+                                        >
+                                            <span>📅</span>
+                                            <span>{{ task.due_date }}</span>
+                                        </button>
 
-                                <!-- 【副アクション】ステータス管理：控えめに -->
-                                <div class="flex gap-4">
+                                        <div v-if="activeMenu.taskId === task.id && activeMenu.type === 'due'" @click.stop class="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-20 space-y-2">
+                                            <div class="text-xs font-semibold text-slate-500 mb-1">期限を変更</div>
+                                            <div class="grid grid-cols-1 gap-1">
+                                                <button @click="updateDueDate(task, todayStr)" class="text-left px-2.5 py-1 text-xs bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-800 transition">今日 ({{ todayStr }})</button>
+                                                <button @click="updateDueDate(task, getTomorrowStr())" class="text-left px-2.5 py-1 text-xs bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-800 transition">明日 ({{ getTomorrowStr() }})</button>
+                                                <button @click="updateDueDate(task, getThisWeekendStr())" class="text-left px-2.5 py-1 text-xs bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-800 transition">今週末</button>
+                                            </div>
+                                            <div class="pt-2 border-t border-slate-100">
+                                                <input 
+                                                    type="date" 
+                                                    :value="task.due_date" 
+                                                    @change="updateDueDate(task, $event.target.value)"
+                                                    class="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 focus:border-slate-900 focus:ring-slate-900 cursor-pointer"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <button 
-                                        @click="bulkUpdateStatus(0)" 
-                                        class="px-3 py-1.5 text-indigo-600 border border-indigo-200 bg-white text-sm rounded-md hover:bg-indigo-50 transition"
+                                        @click="deleteTask(task)"
+                                        class="text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition px-1.5 py-1.5 cursor-pointer rounded-lg hover:bg-rose-50"
+                                        title="削除"
                                     >
-                                        ⚪ 未着手に変更
-                                    </button>
-                                    <button 
-                                        @click="bulkUpdateStatus(1)" 
-                                        class="px-3 py-1.5 text-indigo-600 border border-indigo-200 bg-white text-sm rounded-md hover:bg-indigo-50 transition"
-                                    >
-                                        ⚡ 進行中に変更
-                                    </button>
-                                    <button 
-                                        @click="bulkUpdateStatus(2)" 
-                                        class="px-3 py-1.5 text-indigo-600 border border-indigo-200 bg-white text-sm rounded-md hover:bg-indigo-50 transition"
-                                    >
-                                        ✅ 完了に変更
-                                    </button>
-                                    <button 
-                                        @click="bulkDelete" 
-                                        class="px-3 py-1.5 text-rose-500 hover:text-rose-600 text-sm font-medium transition"
-                                    >
-                                        削除する
-                                    </button>
-                                    <button 
-                                        @click="selectedTasks = []" 
-                                        class="px-3 py-1.5 text-slate-500 hover:text-slate-700 text-sm underline underline-offset-4 decoration-slate-300"
-                                    >
-                                        選択解除
+                                        ✕
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- タスクリスト表示エリア -->
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-xl border border-slate-200/60 p-6">
-                    <TaskList 
-                        v-if="activeTab === 'overdue'" 
-                        :tasks="filteredOverdue" 
-                        :selected-tasks="selectedTasks"
-                        @update-status="updateStatus" 
-                        @delete-task="deleteTask" 
-                        @edit-task="openEditModal" 
-                        @toggle-select="toggleSelect"
-                    />
-                    <TaskList 
-                        v-if="activeTab === 'all'" 
-                        :tasks="filteredAll" 
-                        :selected-tasks="selectedTasks"
-                        @update-status="updateStatus" 
-                        @delete-task="deleteTask" 
-                        @edit-task="openEditModal" 
-                        @toggle-select="toggleSelect"
-                    />
-                    <TaskList 
-                        v-if="activeTab === 'today'" 
-                        :tasks="filteredToday"
-                        :selected-tasks="selectedTasks"
-                        @update:tasks="todayDragTasks = $event"
-                        :is-draggable="!searchQuery && !hideCompleted" 
-                        :show-priority="true"
-                        @reorder="onEndToday"
-                        @update-status="updateStatus" 
-                        @delete-task="deleteTask" 
-                        @edit-task="openEditModal"
-                        @toggle-select="toggleSelect"
-                    />
-                    <TaskList 
-                        v-if="activeTab === 'weekly'" 
-                        :tasks="filteredWeekly" 
-                        :selected-tasks="selectedTasks"
-                        @update-status="updateStatus" 
-                        @delete-task="deleteTask" 
-                        @edit-task="openEditModal" 
-                        @toggle-select="toggleSelect"
-                    />
-                    <TaskList 
-                        v-if="activeTab === 'someday'" 
-                        :tasks="filteredSomeday" 
-                        :selected-tasks="selectedTasks"
-                        @update-status="updateStatus" 
-                        @delete-task="deleteTask" 
-                        @edit-task="openEditModal" 
-                        @toggle-select="toggleSelect"
-                    />
-                    <TaskList 
-                        v-if="activeTab === 'completed'" 
-                        :tasks="filteredCompleted" 
-                        :selected-tasks="selectedTasks"
-                        @update-status="updateStatus" 
-                        @delete-task="deleteTask" 
-                        @edit-task="openEditModal" 
-                        @toggle-select="toggleSelect"
-                    />
                 </div>
             </div>
         </div>
-
-        <!-- 編集モーダル -->
-        <TaskEditModal 
-            :show="isEditModalOpen" 
-            :task="editingTask" 
-            @close="isEditModalOpen = false" 
-        />
     </AuthenticatedLayout>
 </template>
