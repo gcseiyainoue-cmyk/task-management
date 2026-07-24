@@ -26,14 +26,14 @@ import { useToast } from '@/Composables/useToast';                       // ユ�
 
 // --- 3. UIコンポーネント層のインポート ---
 // 画面をパーツ単位に細かく分割し、部品として組み立てることで保守性を最大化しています。
-import DesktopSidebar from '@/Components/Tasks/DesktopSidebar.vue';
-import MobileDrawer from '@/Components/Tasks/MobileDrawer.vue';
-import TaskControlBar from '@/Components/Tasks/TaskControlBar.vue';
-import TaskListSection from '@/Components/Tasks/TaskListSection.vue';
-import TaskFormModal from '@/Components/Tasks/TaskFormModal.vue';
-import TaskActionModal from '@/Components/Tasks/TaskActionModal.vue';
-import BulkActionBar from '@/Components/Tasks/BulkActionBar.vue';
-import MobileNav from '@/Components/Tasks/MobileNav.vue';
+import DesktopSidebar from '@/Components/Tasks/DesktopSidebar.vue';     // PC用サイドバー（カテゴリツリーや各種メニューを表示）
+import MobileDrawer from '@/Components/Tasks/MobileDrawer.vue';         // モバイル用ドロワーメニュー（スマホ表示時のサイドバー代替）
+import TaskControlBar from '@/Components/Tasks/TaskControlBar.vue';     // 検索窓・カテゴリ絞り込み・ソート切替を行うコントロールバー
+import TaskListSection from '@/Components/Tasks/TaskListSection.vue';   // タスクのリスト一覧を表示するセクションコンポーネント
+import TaskFormModal from '@/Components/Tasks/TaskFormModal.vue';       // 新規タスク作成用のモーダルフォーム
+import TaskActionModal from '@/Components/Tasks/TaskActionModal.vue';   // 個別タスクの期限・カテゴリ・優先度変更などの操作用モーダル
+import BulkActionBar from '@/Components/Tasks/BulkActionBar.vue';       // 複数選択時のみ画面下部に浮上する一括操作バー
+import MobileNav from '@/Components/Tasks/MobileNav.vue';             // モバイル専用のボトムナビゲーションバー
 
 /**
  * -------------------------------------------------------------------------------------

@@ -3,8 +3,10 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use App\Models\User;
 use App\Models\Task;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Hash;
 
 class TaskSeeder extends Seeder
 {
@@ -13,8 +15,23 @@ class TaskSeeder extends Seeder
      */
     public function run(): void
     {
-        // 必要に応じて既存データをリセットする場合はコメントアウトを解除
-        // Task::truncate();
+        // 1人目のテストユーザー（検証用アカウントA）を作成または取得
+        $user1 = User::firstOrCreate(
+            ['email' => 'a@example.com'],
+            [
+                'name' => 'テストユーザーA',
+                'password' => Hash::make('password'),
+            ]
+        );
+
+        // 2人目のテストユーザー（検証用アカウントB）を作成または取得
+        $user2 = User::firstOrCreate(
+            ['email' => 'b@example.com'],
+            [
+                'name' => 'テストユーザーB',
+                'password' => Hash::make('password'),
+            ]
+        );
 
         $pools = [
             ['category' => 'work', 'sub' => 'project', 'titles' => ['Q3プロジェクトのキックオフ資料作成', 'クライアント向け進捗レポートのまとめ', '新機能の要件定義レビュー', 'デザインモックアップのフィードバック反映']],
@@ -45,31 +62,38 @@ class TaskSeeder extends Seeder
         $offsets = [0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 9, 11, 14];
         $priorities = ['high', 'medium', 'low'];
 
-        $tasks = [];
-        $createdTitles = [];
+        // 各ユーザーごとにタスクを生成して割り当てる
+        $users = [$user1, $user2];
 
-        while (count($tasks) < 30) {
-            $pool = $pools[array_rand($pools)];
-            $title = $pool['titles'][array_rand($pool['titles'])];
+        foreach ($users as $user) {
+            $tasks = [];
+            $createdTitles = [];
 
-            if (!in_array($title, $createdTitles)) {
-                $createdTitles[] = $title;
-                $offset = $offsets[array_rand($offsets)];
-                $priority = $priorities[array_rand($priorities)];
+            // 各ユーザーに15件ずつタスクを生成
+            while (count($tasks) < 15) {
+                $pool = $pools[array_rand($pools)];
+                $title = $pool['titles'][array_rand($pool['titles'])];
 
-                $tasks[] = [
-                    'title' => $title,
-                    'category' => $pool['category'],
-                    'sub_category' => $pool['sub'],
-                    'priority' => $priority,
-                    'due_date' => Carbon::today()->addDays($offset)->toDateString(),
-                    'is_completed' => (rand(1, 100) <= 15), // 15%の確率で完了済み
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
+                if (!in_array($title, $createdTitles)) {
+                    $createdTitles[] = $title;
+                    $offset = $offsets[array_rand($offsets)];
+                    $priority = $priorities[array_rand($priorities)];
+
+                    $tasks[] = [
+                        'user_id' => $user->id, // ユーザーIDを紐付け
+                        'title' => $title,
+                        'category' => $pool['category'],
+                        'sub_category' => $pool['sub'],
+                        'priority' => $priority,
+                        'due_date' => Carbon::today()->addDays($offset)->toDateString(),
+                        'is_completed' => (rand(1, 100) <= 15), // 15%の確率で完了済み
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
             }
-        }
 
-        Task::insert($tasks);
+            Task::insert($tasks);
+        }
     }
 }

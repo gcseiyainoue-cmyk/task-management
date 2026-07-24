@@ -1,8 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     status: {
@@ -22,40 +21,34 @@ const verificationLinkSent = computed(
 </script>
 
 <template>
-    <GuestLayout>
-        <Head title="Email Verification" />
+    <GuestLayout
+        :auth-route="route('logout')"
+        auth-route-text="ログアウト"
+    >
+        <Head title="メールアドレス確認 - Tasks" />
 
-        <div class="mb-4 text-sm text-gray-600">
-            Thanks for signing up! Before getting started, could you verify your
-            email address by clicking on the link we just emailed to you? If you
-            didn't receive the email, we will gladly send you another.
+        <div class="mb-6 text-center">
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight mb-2">メールアドレスの確認</h1>
+            <p class="text-xs text-slate-500 leading-relaxed">
+                ご登録ありがとうございます！始める前に、お送りした確認リンクをクリックしてメールアドレスの認証を行ってください。メールが届いていない場合は、再送信ボタンより再度お送りいたします。
+            </p>
         </div>
 
         <div
-            class="mb-4 text-sm font-medium text-green-600"
+            class="mb-6 text-xs font-medium text-emerald-600 bg-emerald-50 p-3 rounded-xl border border-emerald-200 text-center"
             v-if="verificationLinkSent"
         >
-            A new verification link has been sent to the email address you
-            provided during registration.
+            ご登録いただいたメールアドレスに、新しい確認リンクを送信しました。
         </div>
 
-        <form @submit.prevent="submit">
-            <div class="mt-4 flex items-center justify-between">
-                <PrimaryButton
-                    :class="{ 'opacity-25': form.processing }"
-                    :disabled="form.processing"
-                >
-                    Resend Verification Email
-                </PrimaryButton>
-
-                <Link
-                    :href="route('logout')"
-                    method="post"
-                    as="button"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >Log Out</Link
-                >
-            </div>
+        <form @submit.prevent="submit" class="space-y-4">
+            <button
+                type="submit"
+                :disabled="form.processing"
+                class="w-full py-3 rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm active:scale-95 disabled:opacity-50"
+            >
+                確認メールを再送信する
+            </button>
         </form>
     </GuestLayout>
 </template>

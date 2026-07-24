@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -15,13 +14,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
-
+        // TaskSeeder 内でマルチユーザー（テストユーザーA・B）とタスクを一括生成するため、
+        // ここでは TaskSeeder のみを呼び出す設計に統一します。
         $this->call([
             TaskSeeder::class,
         ]);
