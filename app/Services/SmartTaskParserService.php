@@ -18,6 +18,12 @@ use Illuminate\Support\Str;
 
 class SmartTaskParserService
 {
+    /**
+     * 自然言語のタスク文字列を解析し、構造化されたデータ配列を返却する
+     *
+     * @param string $line
+     * @return array<string, mixed>
+     */
     public function parse(string $line): array
     {
         $category = 'inbox';
@@ -26,6 +32,7 @@ class SmartTaskParserService
         $dueDate = now()->toDateString(); 
         $cleanTitle = $line;
 
+        // 優先度を表すキーワード・ショートカットのパターンマッチング
         $priorityPatterns = [
             '/(?:\[hi\]|\(hi\)|\bhi\b|(?<=[^\x00-\x7F])hi)/ui' => 'high',
             '/(?:\[lo\]|\(lo\)|\blo\b|(?<=[^\x00-\x7F])lo)/ui' => 'low',
@@ -39,6 +46,7 @@ class SmartTaskParserService
             }
         }
 
+        // カテゴリおよびサブカテゴリを表すパターンマッチング
         $categoryPatterns = [
             '/(?:\[wo\]|\(wo\)|\bwo\b|(?<=[^\x00-\x7F])wo)/ui' => ['work', 'task'],
             '/(?:\[pe\]|\(pe\)|\bpe\b|(?<=[^\x00-\x7F])pe)/ui' => ['personal', 'shopping'],
@@ -55,6 +63,7 @@ class SmartTaskParserService
             }
         }
 
+        // 明示的な指定がない場合、タイトル内のキーワードから優先度を推論
         if ($priority === 'medium') {
             if (Str::contains($cleanTitle, ['急ぎ', '緊急', '最優先', '今すぐ', '至急', '重要', '!'])) {
                 $priority = 'high';
@@ -63,6 +72,7 @@ class SmartTaskParserService
             }
         }
 
+        // 明示的な指定がない場合、タイトル内のキーワードからカテゴリを推論
         if ($category === 'inbox') {
             if (Str::contains($cleanTitle, ['ミーティング', '会議', '資料', '修正', '開発', 'バグ', 'PR', 'メール', '返信'])) {
                 $category = 'work';
@@ -82,6 +92,7 @@ class SmartTaskParserService
             }
         }
 
+        // 日付を表す日本語キーワードとクロージャーによる動的日付計算
         $dateKeywords = [
             '明後日' => fn() => now()->addDays(2)->toDateString(),
             'あさって' => fn() => now()->addDays(2)->toDateString(),
@@ -115,6 +126,7 @@ class SmartTaskParserService
             }
         }
 
+        // 抽出用キーワードが取り除かれたタイトルの余分な空白や句読点をクレンジング
         $cleanTitle = preg_replace('/^[、。\s]+|[、。\s]+$/u', '', $cleanTitle);
         $cleanTitle = preg_replace('/[、。\s]{2,}/u', '', $cleanTitle);
         $cleanTitle = trim($cleanTitle);
