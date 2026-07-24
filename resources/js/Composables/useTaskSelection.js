@@ -1,21 +1,37 @@
-// @/Composables/useTaskSelection.js
+/**
+ * =====================================================================================
+ * 【ファイル名】 useTaskSelection.js
+ * 【アーキテクチャ上の位置づけ】 コンポーザブル層（ビジネスロジック / タスクの選択・一括選択状態管理）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * 複数タスクに対する一括操作（一括削除、一括カテゴリ・重要度・期限変更など）を実現するための
+ * 選択モードの状態（`isSelectionMode`）および選択中のタスクIDリスト（`selectedTaskIds`）を管理するビジネスロジックをカプセル化しています。
+ * 未完了タスク群（`activeTasks`）や完了済みタスク群（`completedTasksList`）のリアクティブな参照を引数として受け取り、
+ * セクションごとの「すべて選択 / 選択解除」トグルや個別の選択切替を効率的に処理することで、
+ * プレゼンテーション層のコンポーネントを肥大化させずに高度な一括選択インタラクションを実現しています。
+ */
+
 import { ref } from 'vue';
 
 export function useTaskSelection(activeTasks, completedTasksList) {
+    // --- ローカルステート（選択モードの有効フラグ、選択されたタスクIDの配列） ---
     const isSelectionMode = ref(false);
     const selectedTaskIds = ref([]);
 
+    // --- 選択モード自体の切り替え（モード解除時は選択IDリストもリセット） ---
     const toggleSelectionMode = () => {
         isSelectionMode.value = !isSelectionMode.value;
         if (!isSelectionMode.value) selectedTaskIds.value = [];
     };
 
+    // --- 個別タスクの選択・非選択をトグル ---
     const toggleTaskSelection = (taskId) => {
         const idx = selectedTaskIds.value.indexOf(taskId);
         if (idx > -1) selectedTaskIds.value.splice(idx, 1);
         else selectedTaskIds.value.push(taskId);
     };
 
+    // --- 未完了タスクグループの一括選択 / 解除 ---
     const toggleSelectActive = () => {
         const activeIds = activeTasks.value.map(t => t.id);
         const allActiveSelected = activeIds.every(id => selectedTaskIds.value.includes(id));
@@ -27,6 +43,7 @@ export function useTaskSelection(activeTasks, completedTasksList) {
         }
     };
 
+    // --- 完了済みタスクグループの一括選択 / 解除 ---
     const toggleSelectCompleted = () => {
         const completedIds = completedTasksList.value.map(t => t.id);
         const allCompletedSelected = completedIds.every(id => selectedTaskIds.value.includes(id));
@@ -38,6 +55,7 @@ export function useTaskSelection(activeTasks, completedTasksList) {
         }
     };
 
+    // --- 外部公開するステートおよびハンドラーの返却 ---
     return {
         isSelectionMode,
         selectedTaskIds,
