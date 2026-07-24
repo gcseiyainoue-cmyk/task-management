@@ -1,23 +1,40 @@
 <script setup>
+/**
+ * =====================================================================================
+ * 【ファイル名】 Sidebar.vue
+ * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーションコンポーネント / モバイル用サイドバー・ドロワー）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * モバイルドロワー等で展開されるナビゲーションコンポーネントです。
+ * クイックビューとして「未分類」「今日」を2カラムのグリッドで効率よく配置し、
+ * 「すべてのタスク」をフル幅（col-span-2）でその下に配置することで、視認性とタップのしやすさを両立しています。
+ * さらに、カテゴリ一覧を横長スタイルで動的ループ描画し、項目の増減や奇数個であっても
+ * レイアウトが崩れない洗練されたUI設計を実現しています。
+ * 各リンククリック時には親コンポーネントへ 'close' イベントを送信し、ドロワーをスムーズに閉じます。
+ */
+
 import { Link } from '@inertiajs/vue3';
 import { categoryTree } from '@/Constants/task';
 
+// --- プロパティの定義（全タスクデータ、現在選択中のカテゴリ、本日の日付文字列） ---
 defineProps({
     tasks: Array,
     currentCategory: String,
     todayStr: String,
 });
 
+// --- イベント定義（リンク選択時にドロワーを閉じるための通知） ---
 defineEmits(['close']);
 </script>
 
 <template>
+    <!-- 【サイドバー/ドロワーレイアウト】モバイル表示に特化したコンパクトかつ整理されたナビゲーション領域 -->
     <div class="space-y-4 pb-1">
-        <!-- クイックビュー -->
+        <!-- ─── クイックビューセクション ─── -->
         <div class="space-y-1.5">
             <div class="text-[10px] font-bold text-slate-400 px-1 uppercase tracking-wider">ビュー</div>
             <div class="grid grid-cols-2 gap-1.5">
-                <!-- 未分類 -->
+                <!-- 「未分類」へのクイックリンク -->
                 <Link 
                     @click="$emit('close')"
                     :href="route('dashboard', { category: 'inbox' })" 
@@ -30,7 +47,7 @@ defineEmits(['close']);
                     </span>
                 </Link>
 
-                <!-- 今日 -->
+                <!-- 「今日」へのクイックリンク -->
                 <Link 
                     @click="$emit('close')"
                     :href="route('dashboard', { category: 'today' })" 
@@ -43,7 +60,7 @@ defineEmits(['close']);
                     </span>
                 </Link>
 
-                <!-- すべて -->
+                <!-- 「すべてのタスク」へのリンク（グリッドの2カラムをフル活用） -->
                 <Link 
                     @click="$emit('close')"
                     :href="route('dashboard', { category: 'all' })" 
@@ -57,10 +74,11 @@ defineEmits(['close']);
             </div>
         </div>
 
-        <!-- カテゴリリスト（横長スタイルに変更し、奇数個でも崩れないように修正） -->
+        <!-- ─── カテゴリリストセクション（横長スタイル） ─── -->
         <div class="space-y-1.5">
             <div class="text-[10px] font-bold text-slate-400 px-1 uppercase tracking-wider">カテゴリ</div>
             <div class="space-y-1.5">
+                <!-- 定数（categoryTree）をループし、未分類（inbox）以外の各カテゴリを動的生成 -->
                 <Link 
                     v-for="(val, key) in categoryTree" 
                     :key="key"
