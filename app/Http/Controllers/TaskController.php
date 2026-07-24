@@ -32,6 +32,9 @@ class TaskController extends Controller
 
     public function index($category = 'all')
     {
+        // ▼ ルートパラメータ省略時（null）に 'all' をフォールバックする安全策
+        $category = $category ?? 'all';
+
         $allTasks = Task::oldest()->get();
 
         $filteredTasks = match ($category) {
