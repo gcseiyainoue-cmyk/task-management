@@ -1,18 +1,36 @@
 <script setup>
+/**
+ * =====================================================================================
+ * 【ファイル名】 MobileNav.vue (※想定されるファイル名)
+ * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーションコンポーネント / モバイル用ボトムナビゲーション）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * スマートフォンなどの狭小画面デバイスにおいて、親指が届きやすい画面下部に常時固定（fixed）される
+ * ボトムナビゲーションバーです。
+ * よく利用される主要なビュー（すべて、今日、未分類）へのダイレクトな遷移リンクに加え、
+ * 中央には新規タスク追加モーダルを即座に起動するアクセントボタン（FAB風）、
+ * さらにその他のカテゴリや詳細メニューを開くためのドロワー起動ボタンを配置しています。
+ * 件数に応じた動的バッジ表示や、アクティブ状態の視覚的フィードバックを備え、
+ * モバイルにおける高い操作性とUXを実現しています。
+ */
+
 import { Link } from '@inertiajs/vue3';
 
+// --- プロパティの定義（現在選択中のカテゴリ、今日および未分類のタスク件数） ---
 defineProps({
     currentCategory: String,
     todayCount: Number,
     inboxCount: Number,
 });
 
+// --- イベント定義（メニューおよびタスク作成モーダルのオープンを通知） ---
 defineEmits(['open-menu', 'open-task-modal']);
 </script>
 
 <template>
+    <!-- 【ボトムナビゲーションレイアウト】画面最下部に固定配置され、モバイルの親指操作に最適化されたタブバー -->
     <div class="fixed bottom-0 inset-x-0 z-40 bg-white/90 backdrop-blur-md border-t border-slate-200/80 px-4 py-2 lg:hidden flex items-center justify-around shadow-lg">
-        <!-- すべて -->
+        <!-- 「すべてのタスク」への遷移リンク -->
         <Link 
             :href="route('dashboard', { category: 'all' })"
             :class="['flex flex-col items-center gap-0.5 text-[10px] font-bold transition px-2 py-1 rounded-xl', currentCategory === 'all' ? 'text-slate-900 bg-slate-100' : 'text-slate-400 hover:text-slate-600']"
@@ -21,7 +39,7 @@ defineEmits(['open-menu', 'open-task-modal']);
             <span>すべて</span>
         </Link>
 
-        <!-- 今日 -->
+        <!-- 「今日」のタスクへの遷移リンク（件数バッジ付き） -->
         <Link 
             :href="route('dashboard', { category: 'today' })"
             :class="['flex flex-col items-center gap-0.5 text-[10px] font-bold transition px-2 py-1 rounded-xl relative', currentCategory === 'today' ? 'text-slate-900 bg-slate-100' : 'text-slate-400 hover:text-slate-600']"
@@ -33,7 +51,7 @@ defineEmits(['open-menu', 'open-task-modal']);
             </span>
         </Link>
 
-        <!-- 新規作成ボタン（半角の「+」に変更し、正円で中央配置を調整） -->
+        <!-- 新規タスク作成ボタン（中央配置のアクセントボタン） -->
         <button 
             @click="$emit('open-task-modal')"
             class="flex items-center justify-center w-10 h-10 rounded-full bg-slate-900 text-white shadow-md active:scale-95 transition cursor-pointer hover:bg-slate-800"
@@ -41,7 +59,7 @@ defineEmits(['open-menu', 'open-task-modal']);
             <span class="text-xl font-normal leading-none">+</span>
         </button>
 
-        <!-- 未分類 -->
+        <!-- 「未分類」への遷移リンク（件数バッジ付き） -->
         <Link 
             :href="route('dashboard', { category: 'inbox' })"
             :class="['flex flex-col items-center gap-0.5 text-[10px] font-bold transition px-2 py-1 rounded-xl relative', currentCategory === 'inbox' ? 'text-slate-900 bg-slate-100' : 'text-slate-400 hover:text-slate-600']"
@@ -53,7 +71,7 @@ defineEmits(['open-menu', 'open-task-modal']);
             </span>
         </Link>
 
-        <!-- メニューボタン -->
+        <!-- メニューボタン（サイドバー/ドロワー展開用） -->
         <button 
             @click="$emit('open-menu')"
             class="flex flex-col items-center gap-0.5 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition px-2 py-1 rounded-xl cursor-pointer"
