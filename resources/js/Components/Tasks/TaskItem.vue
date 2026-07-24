@@ -1,7 +1,20 @@
 <script setup>
+/**
+ * =====================================================================================
+ * 【ファイル名】 TaskItem.vue
+ * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーションコンポーネント / 個別タスクカード）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * 各タスクの表示、インライン編集、完了/未完了の状態遷移アニメーション、一括選択モード時のチェック制御、
+ * および各メタデータ（カテゴリ、重要度、期日）の変更メニュー呼び出しを担うコンポーネントです。
+ * 複雑な状態変更やアニメーションのライフサイクル管理はカスタムフック（useTaskItem）に委譲し、
+ * コンポーネント側は純粋なUI描画とユーザー操作のイベント発火（Data Down, Actions Up）に徹しています。
+ */
+
 import { categoryTree, priorityConfig } from '@/Constants/task';
 import { useTaskItem } from '@/Composables/useTaskItem';
 
+// --- プロパティの定義（親リストから受け取るタスクデータおよび各種状態フラグ） ---
 const props = defineProps({
     task: Object,
     isSelectionMode: Boolean,
@@ -10,11 +23,13 @@ const props = defineProps({
     isFlashing: Boolean,
 });
 
+// --- イベント定義（親やロジック層へ通知するアクション群） ---
 const emit = defineEmits([
     'toggle', 'select', 'delete', 'update-title', 
     'open-menu', 'action-handled'
 ]);
 
+// --- ロジック層（useTaskItem）からの状態・操作関数のインポート ---
 const {
     editingTaskId,
     editingTitle,
@@ -32,12 +47,13 @@ const {
 </script>
 
 <template>
+    <!-- 【動的クラス制御】選択状態、完了アニメーション、新着ハイライト、通常時などのUI状態に応じたスタイルを動的に切り替え -->
     <div 
         @click="handleCardClick"
         :class="[
             'group relative rounded-2xl p-4 sm:p-4.5 transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] border flex flex-col gap-3 sm:gap-0 sm:flex-row sm:items-center sm:justify-between overflow-hidden transform-gpu',
             
-            // 一括選択モード時
+            // 一括選択モード時のスタイル
             isSelectionMode && isSelected 
                 ? 'bg-indigo-50/90 border-indigo-400 ring-2 ring-indigo-300/70 shadow-sm cursor-pointer' 
                 : '',
@@ -45,20 +61,20 @@ const {
                 ? 'bg-slate-50/50 border-indigo-200/80 hover:bg-indigo-50/40 hover:border-indigo-300 cursor-pointer' 
                 : '',
 
-            // 完了/復元アニメーション実行中
+            // 完了/復元アニメーション実行中の特殊ボーダー・リング
             isCompleting ? 'border-emerald-300/80 ring-2 ring-emerald-200/60 shadow-2xs' : '',
             isRestoring ? 'border-slate-300/80 ring-2 ring-slate-200/60 shadow-2xs' : '',
 
-            // 新着タスクハイライト
+            // 新着タスクハイライト演出
             isHighlighted && isFlashing ? 'bg-amber-100/90 border-amber-400 animate-pulse shadow-md' : '',
             isHighlighted && !isFlashing ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-200/50' : '',
 
-            // 通常時
+            // 通常時（完了済みの場合は透明度を下げ、未完了時は標準表示）
             !isSelectionMode && !isCompleting && !isRestoring && !isHighlighted && task.is_completed ? 'bg-slate-50/60 border-slate-200/60 opacity-80 hover:opacity-100 hover:shadow-md' : '',
             !isSelectionMode && !isCompleting && !isRestoring && !isHighlighted && !task.is_completed ? 'bg-white border-slate-200/80 hover:shadow-md' : ''
         ]"
     >
-        <!-- 1. 完了演出 -->
+        <!-- ─── 1. タスク完了時の一連の演出オーバーレイ ─── -->
         <Transition
             enter-active-class="transition duration-500 ease-out"
             enter-from-class="opacity-0 scale-95"
@@ -88,7 +104,7 @@ const {
             </div>
         </Transition>
 
-        <!-- 2. 未完了に戻す演出 -->
+        <!-- ─── 2. 未完了に戻した際の演出オーバーレイ ─── -->
         <Transition
             enter-active-class="transition duration-500 ease-out"
             enter-from-class="opacity-0 scale-95"
@@ -112,8 +128,9 @@ const {
             </div>
         </Transition>
 
-        <!-- メインコンテンツ（左側） -->
+        <!-- ─── メインコンテンツ領域（左側：チェックボックス・完了ボタン・タイトル・カテゴリ） ─── -->
         <div class="flex items-center gap-3 min-w-0 flex-1 w-full">
+            <!-- 一括選択モード時のチェックボックス -->
             <Transition name="fade">
                 <div v-if="isSelectionMode" class="flex items-center justify-center shrink-0">
                     <input 
@@ -126,7 +143,7 @@ const {
                 </div>
             </Transition>
 
-            <!-- 完了ボタン -->
+            <!-- ステータス切替ボタン（完了 / 未完了） -->
             <button 
                 @click.stop="handleToggle"
                 :disabled="isSelectionMode"
@@ -162,8 +179,9 @@ const {
                 </template>
             </button>
 
-            <!-- タイトル・カテゴリ設定 -->
+            <!-- タスクタイトルとカテゴリバッジのコンテナ -->
             <div class="min-w-0 flex-1 space-y-1">
+                <!-- 編集モード時のインライン入力フィールド -->
                 <div v-if="editingTaskId === task.id">
                     <input 
                         type="text" 
@@ -175,6 +193,7 @@ const {
                         class="w-full text-xs sm:text-sm font-bold border-slate-900 rounded-xl py-1.5 px-3 text-slate-900 shadow-inner bg-white"
                     />
                 </div>
+                <!-- 通常表示時のタイトル（クリックでインライン編集開始） -->
                 <div 
                     v-else 
                     @click.stop="isSelectionMode ? handleCardClick() : startEdit(task)"
@@ -186,7 +205,7 @@ const {
                     {{ task.title }}
                 </div>
 
-                <!-- カテゴリバッジ -->
+                <!-- カテゴリ・サブカテゴリバッジ（クリックでメニューポップアップ起動） -->
                 <div class="flex items-center gap-1.5 flex-wrap">
                     <button 
                         @click.stop="$emit('open-menu', task, 'category', $event)"
@@ -203,10 +222,10 @@ const {
             </div>
         </div>
 
-        <!-- 右側：アクションボタン・メタデータ -->
+        <!-- ─── メタデータ領域（右側：重要度、期日、作成日時、削除ボタン） ─── -->
         <div class="flex items-center justify-between sm:justify-end gap-1.5 pt-2 sm:pt-0 border-t border-slate-100 sm:border-t-0 shrink-0 w-full sm:w-auto">
             <div class="flex items-center gap-1.5 flex-wrap">
-                <!-- 優先度 -->
+                <!-- 優先度変更ボタン -->
                 <button 
                     @click.stop="$emit('open-menu', task, 'priority', $event)"
                     :class="['px-2.5 py-1 rounded-xl transition cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs border text-[11px] font-bold whitespace-nowrap shrink-0', priorityConfig[task.priority]?.badgeClass || priorityConfig.medium.badgeClass]"
@@ -216,7 +235,7 @@ const {
                     <span class="text-[9px] opacity-60">▼</span>
                 </button>
 
-                <!-- 期日 -->
+                <!-- 期日変更ボタン -->
                 <button 
                     @click.stop="$emit('open-menu', task, 'due', $event)"
                     :class="['border rounded-xl px-2.5 py-1 transition flex items-center gap-1 cursor-pointer font-bold active:scale-95 shadow-2xs text-[11px] whitespace-nowrap shrink-0', getDueDateBadgeClass(task.due_date, task.is_completed)]"
@@ -226,7 +245,7 @@ const {
                     <span class="text-[9px] opacity-60">▼</span>
                 </button>
 
-                <!-- 作成日時 -->
+                <!-- 作成日時表示 -->
                 <div 
                     v-if="task.created_at" 
                     class="px-2 py-1 rounded-xl bg-slate-100/60 text-slate-400 text-[10px] font-medium flex items-center gap-1 shrink-0 whitespace-nowrap select-none" 
@@ -237,7 +256,7 @@ const {
                 </div>
             </div>
 
-            <!-- 削除ボタン -->
+            <!-- 削除ボタン（ホバー時または常時表示） -->
             <button 
                 @click.stop="$emit('delete', task)"
                 class="text-slate-300 hover:text-rose-600 sm:opacity-0 sm:group-hover:opacity-100 transition p-1.5 cursor-pointer rounded-xl hover:bg-rose-50 shrink-0 ml-auto sm:ml-0"
