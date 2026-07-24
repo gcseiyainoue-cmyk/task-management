@@ -1,6 +1,21 @@
 <script setup>
+/**
+ * =====================================================================================
+ * 【ファイル名】 TaskListSection.vue
+ * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーションコンポーネント / タスクリストセクション・グループ）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * タスクのグループ（未完了セクションや期限切れセクションなど）単位でリストを表示するコンポーネントです。
+ * ヘッダー部分にはセクション名と動的なタスク件数、および一括選択モード時の「すべて選択 / 選択解除」ボタンを配置し、
+ * リスト部分にはVueの `<TransitionGroup>` を採用してタスクの追加・削除・移動（並び替え）時における
+ * スムーズで洗練されたイージングアニメーション（FLIPアニメーション等）を実現しています。
+ * 子コンポーネントである `TaskItem` へ必要な状態（選択状態、ハイライト状態、点滅状態など）を的確に伝播させ、
+ * 各種イベントも適切に親コンポーネントへバブリングします。
+ */
+
 import TaskItem from '@/Components/Tasks/TaskItem.vue';
 
+// --- プロパティの定義（セクションタイトル、タスク配列、一括選択モードの状態管理群） ---
 defineProps({
     title: String,
     tasks: Array,
@@ -13,6 +28,7 @@ defineProps({
     isAllSelected: Boolean,
 });
 
+// --- イベント定義（一括選択切替、単体選択、削除、タイトル更新、メニューオープン等の通知） ---
 defineEmits([
     'toggleSelectAll',
     'toggle',
@@ -25,7 +41,7 @@ defineEmits([
 
 <template>
     <div class="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-sm space-y-3">
-        <!-- ヘッダー（件数 ＆ 一括選択トグル） -->
+        <!-- ─── セクションヘッダー（件数 ＆ 一括選択トグルボタン） ─── -->
         <div class="flex items-center justify-between text-xs font-bold text-slate-400 px-1 pb-1">
             <span>{{ title }} ({{ tasks.length }})</span>
             <button 
@@ -37,13 +53,13 @@ defineEmits([
             </button>
         </div>
 
-        <!-- タスクがない場合の空表示 -->
+        <!-- ─── タスクが空の場合のプレースホルダー表示 ─── -->
         <div v-if="tasks.length === 0" class="text-center py-16 text-slate-400 text-xs font-medium space-y-1">
             <p class="text-base">🎉</p>
             <p>表示するタスクはありません</p>
         </div>
 
-        <!-- タスクカードリスト -->
+        <!-- ─── タスクカードリスト（トランジションアニメーション付き） ─── -->
         <TransitionGroup 
             name="task-list" 
             tag="div" 
@@ -68,6 +84,7 @@ defineEmits([
 </template>
 
 <style scoped>
+/* --- リストトランジション・アニメーション定義 --- */
 .task-list-move {
     transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
