@@ -1,11 +1,11 @@
 <script setup>
 /**
  * =====================================================================================
- * 【ファイル名】 MobileSidebar.vue (※想定されるファイル名)
+ * 【ファイル名】 MobileDrawer.vue
  * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーションコンポーネント / モバイル用サイドバー・ドロワー）
  * =====================================================================================
  * 【実務における設計思想】
- * 先述のデスクトップ用サイドバー（TaskSidebar.vue）とほぼ同等のビュー絞り込みおよびカテゴリ別フィルタリング機能を提供しつつ、
+ * 先述のデスクトップ用サイドバー（DesktopSidebar.vue）とほぼ同等のビュー絞り込みおよびカテゴリ別フィルタリング機能を提供しつつ、
  * モバイル・タブレットの狭小画面（ドロワーやモーダル内）での使用に特化したレイアウト（グリッド配置やタッチ操作用の拡大サイズ・active:scale-95等）を実装しています。
  * 各リンククリック時には `@click="$emit('close')"` を経由して親のモーダル/ドロワーを即座に閉じる設計になっており、
  * スムーズな画面遷移とUXの向上を実現しています。
@@ -35,7 +35,7 @@ defineEmits(['close']);
                 <!-- 「今日」のタスクに絞り込むリンク -->
                 <Link 
                     @click="$emit('close')"
-                    :href="route('dashboard', { category: 'today' })" 
+                    :href="route('dashboard', { view: 'today' })" 
                     :class="['p-3 rounded-2xl text-xs font-semibold transition flex flex-col items-center justify-center gap-1 text-center active:scale-95 border cursor-pointer', currentCategory === 'today' ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80']"
                 >
                     <span class="text-xl">📅</span>
@@ -48,7 +48,7 @@ defineEmits(['close']);
                 <!-- 「すべてのタスク」を表示するリンク -->
                 <Link 
                     @click="$emit('close')"
-                    :href="route('dashboard', { category: 'all' })" 
+                    :href="route('dashboard', { view: 'all' })" 
                     :class="['p-3 rounded-2xl text-xs font-semibold transition flex flex-col items-center justify-center gap-1 text-center active:scale-95 border cursor-pointer', currentCategory === 'all' ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80']"
                 >
                     <span class="text-xl">📂</span>

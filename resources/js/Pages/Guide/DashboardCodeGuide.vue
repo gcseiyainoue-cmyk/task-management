@@ -387,7 +387,7 @@ const closeMenuModal = () => {
             <div class="text-center pt-6">
                 <Link 
                     :href="route('dashboard')" 
-                    class="inline-flex items-center gap-2 bg-slate-900 text-white font-bold text-xs sm:text-sm px-8 py-4 rounded-2xl hover:bg-slate-800 transition shadow-lg active:scale-95"
+                    class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs sm:text-sm px-8 py-4 rounded-2xl hover:bg-slate-50 transition shadow-md active:scale-95"
                 >
                     <span>🚀</span> ダッシュボードへ戻る
                 </Link>

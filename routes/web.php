@@ -8,7 +8,7 @@
  * LaravelとInertia.jsを結合するアプリケーションのルーティング定義ファイルです。
  * 認証（auth）およびメール認証（verified）ミドルウェアによってアクセス制御を行い、
  * 画面遷移（Inertia::render）とデータ操作（TaskControllerの各アクション）の経路を整理しています。
- * 特に、静的なパス（/dashboard/code-guide や /tasks/bulk など）を動的パラメータ
+ * 特に、静的なパス（/guide/... や /tasks/bulk など）を動的パラメータ
  * （{task} など）を含むパスよりも上に記述することで、Laravelのルーティングにおける
  * 意図しないマッチング（競合バグ）を防ぐ堅牢な順序設計がなされています。
  */
@@ -30,17 +30,17 @@ Route::get('/', function () {
 
 // 認証・メール認証が必須のグループ
 Route::middleware(['auth', 'verified'])->group(function () {
-    // Index.vue コード・UI対応ガイドページ（※ パラメータなしの具体的なルートを上部に配置）
-    Route::get('/dashboard/code-guide', function () {
-        return Inertia::render('DashboardCodeGuide');
+    // ダッシュボード・コードガイドページ（URLを /guide/code-guide に変更）
+    Route::get('/guide/code-guide', function () {
+        return Inertia::render('Guide/DashboardCodeGuide');
     })->name('dashboard.code-guide');
 
-    // ダッシュボードメインページ（※ パスパラメータを撤廃し、ビューやカテゴリはクエリパラメータで制御）
+    // ダッシュボードメインページ
     Route::get('/dashboard', [TaskController::class, 'index'])->name('dashboard');
 
-    // タスク管理の使い方ガイドページ
-    Route::get('/tasks/guide', function () {
-        return Inertia::render('TaskGuide');
+    // タスク管理の使い方ガイドページ（URLを /guide/tasks に変更）
+    Route::get('/guide/tasks', function () {
+        return Inertia::render('Guide/TaskGuide');
     })->name('tasks.guide');
 
     // 一括処理・通常の作成ルート（{task} よりも上に配置）

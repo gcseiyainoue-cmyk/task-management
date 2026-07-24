@@ -1,491 +1,320 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useForm, router } from '@inertiajs/vue3';
+/**
+ * =====================================================================================
+ * 【ファイル名】 Index.vue
+ * 【アーキテクチャ上の位置づけ】 統括レイヤー（コーディネーター / コントローラー）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * このファイル自身は「複雑な計算」や「見た目の細かいデザイン」を直接持ちません。
+ * 裏側のロジック（Composables）と、表側の見た目（Components）をインポートし、
+ * 「データとイベントのハブ（交差点）」としてのみ機能させることで、コード全体の見通しを爆発的に高めています。
+ */
+
+// --- 1. コアライブラリ・フレームワークのインポート ---
+import { ref } from 'vue';
+import { useForm, Head } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { categoryTree } from '@/Constants/task';
 
+// --- 2. ビジネスロジック層（Composables）のインポート ---
+// 1ファイルに何千行も書くのを防ぎ、機能ごとに完全分離された再利用可能なJavaScriptモジュール群です。
+import { useTaskHighlight } from '@/Composables/useTaskHighlight';       // タスク移動・新規追加時のハイライト・点滅アニメーション制御
+import { useTaskFilterAndSort } from '@/Composables/useTaskFilterAndSort'; // 検索文字、カテゴリ絞り込み、ソート順の計算ロジック
+import { useTaskSelection } from '@/Composables/useTaskSelection';       // 一括選択モード、選択中タスクID配列の状態管理
+import { useTaskOperations } from '@/Composables/useTaskOperations';     // タスクのCRUD（作成・更新・削除）および一括API通信
+import { useToast } from '@/Composables/useToast';                       // ユーザーへのフィードバック用トースト通知の表示・消去制御
+
+// --- 3. UIコンポーネント層のインポート ---
+// 画面をパーツ単位に細かく分割し、部品として組み立てることで保守性を最大化しています。
+import DesktopSidebar from '@/Components/Tasks/DesktopSidebar.vue';     // PC用サイドバー（カテゴリツリーや各種メニューを表示）
+import MobileDrawer from '@/Components/Tasks/MobileDrawer.vue';         // モバイル用ドロワーメニュー（スマホ表示時のサイドバー代替）
+import TaskControlBar from '@/Components/Tasks/TaskControlBar.vue';     // 検索窓・カテゴリ絞り込み・ソート切替を行うコントロールバー
+import TaskListSection from '@/Components/Tasks/TaskListSection.vue';   // タスクのリスト一覧を表示するセクションコンポーネント
+import TaskFormModal from '@/Components/Tasks/TaskFormModal.vue';       // 新規タスク作成用のモーダルフォーム
+import TaskActionModal from '@/Components/Tasks/TaskActionModal.vue';   // 個別タスクの期限・カテゴリ・優先度変更などの操作用モーダル
+import BulkActionBar from '@/Components/Tasks/BulkActionBar.vue';       // 複数選択時のみ画面下部に浮上する一括操作バー
+import MobileNav from '@/Components/Tasks/MobileNav.vue';             // モバイル専用のボトムナビゲーションバー
+
+/**
+ * -------------------------------------------------------------------------------------
+ * 【Props定義】 バックエンド（Laravel）からのデータ受け取り
+ * -------------------------------------------------------------------------------------
+ * Inertia.jsの仕組みにより、Laravelのコントローラーから渡されたデータが自動的にこのpropsに格納されます。
+ * 型（Array, String）を厳密に定義することで、予期せぬデータ混入によるバグを早期に検知します。
+ */
 const props = defineProps({
-    tasks: Array,
+    tasks: Array,            // データベースから取得したすべてのタスク一覧
+    filteredTasks: Array,    // （予備・互換用）フィルター済みタスク配列
+    currentCategory: String, // 現在選択されているサイドバーのカテゴリキー（'inbox', 'today' など）
 });
 
-// 可能な限り具体的かつ網羅的に拡充したカテゴリツリー
-const categoryTree = {
-    work: {
-        label: '仕事',
-        icon: '💼',
-        badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
-        items: [
-            { key: 'project', label: 'プロジェクト開発', icon: '💻' },
-            { key: 'meeting', label: 'ミーティング・面談', icon: '🤝' },
-            { key: 'task', label: '通常タスク・ルーチン', icon: '📝' },
-            { key: 'docs', label: '資料・レポート作成', icon: '📊' },
-            { key: 'client', label: '顧客対応・連絡', icon: '📞' },
-            { key: 'management', label: 'マネジメント・採用', icon: '👥' },
-        ]
-    },
-    private: {
-        label: 'プライベート',
-        icon: '🏠',
-        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
-        items: [
-            { key: 'shopping', label: '買い物・EC', icon: '🛒' },
-            { key: 'outing', label: 'お出かけ・旅行', icon: '🚗' },
-            { key: 'housework', label: '家事・掃除・洗濯', icon: '🧹' },
-            { key: 'cooking', label: '料理・食事', icon: '🍳' },
-            { key: 'hobby', label: '趣味・エンタメ', icon: '🎨' },
-            { key: 'family', label: '家族・用事', icon: '👨‍👩‍👧‍👦' },
-            { key: 'errands', label: '手続き・役所', icon: '🏛️' },
-        ]
-    },
-    study: {
-        label: '学習・自己投資',
-        icon: '📚',
-        badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
-        items: [
-            { key: 'reading', label: '読書・インプット', icon: '📖' },
-            { key: 'coding', label: 'プログラミング・技術', icon: '⚡' },
-            { key: 'language', label: '語学・英語', icon: '🌐' },
-            { key: 'qualification', label: '資格試験・勉強', icon: '📝' },
-            { key: 'output', label: '記事執筆・発信', icon: '✍️' },
-        ]
-    },
-    health: {
-        label: 'ヘルスケア',
-        icon: '💪',
-        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100',
-        items: [
-            { key: 'workout', label: '筋トレ・運動', icon: '🏋️' },
-            { key: 'running', label: 'ランニング・散歩', icon: '🏃' },
-            { key: 'medical', label: '病院・通院・薬', icon: '🏥' },
-            { key: 'mental', label: 'メンタルケア・睡眠', icon: '🧘' },
-            { key: 'diet', label: '食事管理・栄養', icon: '🥗' },
-        ]
-    },
-    finance: {
-        label: 'ファイナンス',
-        icon: '💰',
-        badgeClass: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100',
-        items: [
-            { key: 'banking', label: '口座・振込・管理', icon: '💳' },
-            { key: 'investment', label: '資産運用・投資', icon: '📈' },
-            { key: 'tax', label: '税金・確定申告', icon: '🧾' },
-            { key: 'budget', label: '家計簿・固定費', icon: '📉' },
-        ]
-    }
+// --- 4. 各種Composableの実行とリアクティブ変数の分割代入 ---
+// 各Composableが持つ独自のリアクティブな状態と操作関数を、このコンポーネントで利用できるように取得します。
+const { toastMessage, showToast } = useToast();
+const { newIds, blinkingMap, recentlyMovedMap, triggerMovedHighlight } = useTaskHighlight();
+
+// 検索・絞り込み・ソートの計算結果および条件変更用関数を取得
+const { 
+    searchQuery,            // 検索窓に入力された文字列
+    selectedCategoryFilter, // セレクトボックス等で選ばれた詳細カテゴリ
+    sortBy,                 // ソート基準（due_date, priority, title等）
+    sortOrder,              // 昇順（asc）か降順（desc）か
+    toggleSortOrder,        // ソート順を反転させる関数
+    activeTasks,            // 絞り込み・ソート済みの「未完了タスク」配列
+    completedTasksList      // 絞り込み・ソート済みの「完了済みタスク」配列
+} = useTaskFilterAndSort(props);
+
+// 一括選択（チェックボックス複数選択）の状態とロジックを取得
+const { 
+    isSelectionMode,        // 一括選択モードが有効かどうか（Boolean）
+    selectedTaskIds,        // 選択されているタスクのIDが格納される配列（例: [12, 15, 20]）
+    toggleSelectionMode,    // 選択モードのON/OFFを切り替える関数
+    toggleTaskSelection,    // 個別タスクのチェック状態を反転させる関数
+    toggleSelectActive,     // 未完了タスクを一括全選択/全解除する関数
+    toggleSelectCompleted   // 完了済みタスクを一括全選択/全解除する関数
+} = useTaskSelection(activeTasks, completedTasksList);
+
+// --- 5. 画面ローカルのUI状態管理（モーダルやドロワーの開閉フラグ） ---
+const isSidebarOpen = ref(false);   // モバイル画面でサイドバードロワーが開いているか（true/false）
+const isTaskModalOpen = ref(false); // 新規タスク追加モーダルが開いているか（true/false）
+const activeMenuTask = ref(null);   // 現在アクションメニュー（三点リーダー等）を開いている対象のタスクオブジェクト
+const activeMenuType = ref(null);   // 開いているメニューの種類（例: 'due', 'category', 'bulkDue' など）
+
+/**
+ * 【個別メニューオープン関数】
+ * 各タスクのメニューボタンが押されたときに、対象タスクとメニューの種類をセットします。
+ * @param {Object} task - 操作対象のタスクデータ
+ * @param {String} type - 開くメニューの種類を識別する文字列
+ * @param {Event} event - ブラウザのクリックイベントオブジェクト
+ */
+const openMenuModal = (task, type, event) => {
+    // 【実務の重要テクニック】イベントバブリング（親要素へのクリック伝播）を阻止します。
+    // これを怠ると、ボタンを押した瞬間に「行全体のクリックイベント」まで誤発作してしまいます。
+    if (event) event.stopPropagation(); 
+    activeMenuTask.value = task;
+    activeMenuType.value = type;
 };
 
-const getSubCategoryMeta = (category, subCategoryKey) => {
-    const parent = categoryTree[category] || categoryTree.private;
-    const found = parent.items.find(i => i.key === subCategoryKey);
-    return found || parent.items[0];
+/**
+ * 【メニュークローズ関数】
+ * モーダルやポップアップメニューを閉じ、保持していた状態をクリア（初期化）します。
+ */
+const closeMenuModal = () => {
+    activeMenuTask.value = null;
+    activeMenuType.value = null;
 };
 
-const activeTab = ref('all');
+// --- 6. タスク操作（CRUD・一括処理）のバインド ---
+const { 
+    bulkUpdate,           // 複数タスク一括更新の共通API通信関数
+    toggleTask,           // タスクの完了/未完了を切り替える関数
+    updateTitle,          // タスク名をインライン編集して保存する関数
+    updateCategoryAndSub, // カテゴリとサブカテゴリを個別に更新する関数
+    updatePriority,       // 優先度を更新する関数
+    updateDueDate,        // 期限日を更新する関数
+    deleteTask,           // 単一タスクを削除する関数
+    bulkDelete            // 選択された複数タスクを一括削除する関数
+} = useTaskOperations(selectedTaskIds, isSelectionMode, triggerMovedHighlight, closeMenuModal, showToast);
 
+// 【一括処理のエイリアス関数群】
+// UIコンポーネントからシンプルに呼び出せるよう、共通の bulkUpdate に具体的な変更データとメッセージを渡してラップしています。
+const bulkComplete = (isCompleted) => bulkUpdate({ is_completed: isCompleted }, '選択したタスクの状態を更新しました');
+const bulkUpdateDueDate = (dueDate) => bulkUpdate({ due_date: dueDate }, '期限を一括更新しました');
+const bulkUpdateCategoryAndSub = (category, subCategory) => bulkUpdate({ category, sub_category: subCategory }, 'カテゴリを一括変更しました');
+const bulkUpdatePriority = (priority) => bulkUpdate({ priority }, '優先度を一括変更しました');
+
+// --- 7. 新規タスク作成フォーム（useForm）の初期化 ---
+const todayStr = new Date().toISOString().split('T')[0]; // 本日の日付を 'YYYY-MM-DD' 形式の文字列で取得
+
+// 現在のカテゴリが 'all' や 'today' の場合は新規作成時のデフォルトとして 'inbox' を割り当てる安全ガード処理
+const activeCategoryKey = ['all', 'today'].includes(props.currentCategory) ? 'inbox' : props.currentCategory;
+
+// 該当カテゴリに紐づくデフォルトのサブカテゴリを取得（存在しない場合は 'general'）
+const defaultSubKey = categoryTree[activeCategoryKey]?.defaultSub || 'general';
+
+/**
+ * 【Inertia useForm の定義】
+ * フォームの入力値管理だけでなく、サーバー送信時のローディング状態（processing）や、
+ * バリデーションエラー（errors）の自動保持を裏側で全自動で行ってくれる強力なフックです。
+ */
 const form = useForm({
-    title: '',
-    due_date: new Date().toISOString().split('T')[0],
-    category: 'private',
-    sub_category: 'shopping',
-    priority: 'medium',
+    title: '',              // タスク名（最初は空文字）
+    due_date: todayStr,     // 期限日（デフォルトで今日の日付をセット）
+    category: activeCategoryKey,       // カテゴリ
+    sub_category: defaultSubKey,       // サブカテゴリ
+    priority: 'medium',     // 優先度（デフォルトは中）
 });
 
-const todayStr = new Date().toISOString().split('T')[0];
-
-const getTomorrowStr = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-};
-
-const getThisWeekendStr = () => {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = d.getDate() + (7 - day) % 7;
-    d.setDate(diff);
-    return d.toISOString().split('T')[0];
-};
-
+/**
+ * 【新規タスク送信関数】
+ * フォームに入力されたデータをサーバーへ非同期送信します。
+ */
 const submitTask = () => {
-    if (!form.title.trim()) return;
-    
+    // 【ガード句】タイトルが空、またはスペースのみの場合は処理を中断
+    if (!form.title.trim()) return; 
+
     form.post(route('tasks.store'), {
-        preserveScroll: true,
+        preserveScroll: true, // 【UX向上】送信後に画面が一番上に強制スクロールされるのを防ぎ、現在の位置を維持する
         onSuccess: () => {
-            form.reset('title');
-            form.priority = 'medium';
-            form.due_date = todayStr;
-        },
+            showToast('タスクを追加しました'); // 成功トーストを表示
+            form.reset('title');       // 入力されたタイトル文字だけをリセット
+            isTaskModalOpen.value = false; // モーダルを閉じる
+        }
     });
-};
-
-const toggleTask = (task) => {
-    router.patch(route('tasks.update', task.id), {
-        is_completed: !task.is_completed,
-    }, {
-        preserveScroll: true,
-    });
-};
-
-const activeMenu = ref({ taskId: null, type: null });
-
-const toggleMenu = (taskId, type, event) => {
-    event.stopPropagation();
-    if (activeMenu.value.taskId === taskId && activeMenu.value.type === type) {
-        activeMenu.value = { taskId: null, type: null };
-    } else {
-        activeMenu.value = { taskId, type };
-    }
-};
-
-const closeMenu = () => {
-    activeMenu.value = { taskId: null, type: null };
-};
-
-onMounted(() => {
-    window.addEventListener('click', closeMenu);
-});
-onUnmounted(() => {
-    window.removeEventListener('click', closeMenu);
-});
-
-const updateCategoryAndSub = (task, category, subCategory) => {
-    router.patch(route('tasks.update', task.id), { 
-        category, 
-        sub_category: subCategory 
-    }, { preserveScroll: true });
-    closeMenu();
-};
-
-const updatePriority = (task, priority) => {
-    router.patch(route('tasks.update', task.id), { priority }, { preserveScroll: true });
-    closeMenu();
-};
-
-const updateDueDate = (task, due_date) => {
-    router.patch(route('tasks.update', task.id), { due_date }, { preserveScroll: true });
-    closeMenu();
-};
-
-const deleteTask = (task) => {
-    router.delete(route('tasks.destroy', task.id), {
-        preserveScroll: true,
-    });
-};
-
-const editingTaskId = ref(null);
-const editingTitle = ref('');
-
-const startEdit = (task) => {
-    closeMenu();
-    editingTaskId.value = task.id;
-    editingTitle.value = task.title;
-};
-
-const saveEdit = (task) => {
-    if (!editingTitle.value.trim() || editingTitle.value === task.title) {
-        editingTaskId.value = null;
-        return;
-    }
-    router.patch(route('tasks.update', task.id), {
-        title: editingTitle.value,
-    }, {
-        preserveScroll: true,
-        onSuccess: () => { editingTaskId.value = null; },
-    });
-};
-
-const cancelEdit = () => {
-    editingTaskId.value = null;
-};
-
-const todayTasks = computed(() => props.tasks.filter(t => t.due_date === todayStr));
-const completedTodayCount = computed(() => todayTasks.value.filter(t => t.is_completed).length);
-const totalTodayCount = computed(() => todayTasks.value.length);
-const progressPercent = computed(() => {
-    if (totalTodayCount.value === 0) return 0;
-    return Math.round((completedTodayCount.value / totalTodayCount.value) * 100);
-});
-const completedTotalCount = computed(() => props.tasks.filter(t => t.is_completed).length);
-
-const filteredTasks = computed(() => {
-    let result = [...props.tasks];
-
-    if (activeTab.value === 'today') {
-        result = result.filter(task => task.due_date === todayStr);
-        result.sort((a, b) => {
-            if (a.is_completed !== b.is_completed) {
-                return a.is_completed ? 1 : -1;
-            }
-            const priorityWeight = { high: 3, medium: 2, low: 1 };
-            const pDiff = (priorityWeight[b.priority] || 2) - (priorityWeight[a.priority] || 2);
-            if (pDiff !== 0) return pDiff;
-            return a.id - b.id;
-        });
-    } else if (activeTab.value !== 'all') {
-        result = result.filter(task => task.category === activeTab.value);
-    }
-
-    return result;
-});
-
-const priorityConfig = {
-    high: { 
-        label: '重要度: 高', 
-        badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200/90 font-semibold', 
-        cardAccent: 'border-l-4 border-l-rose-500' 
-    },
-    medium: { 
-        label: '重要度: 中', 
-        badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200/90', 
-        cardAccent: 'border-l-4 border-l-amber-400' 
-    },
-    low: { 
-        label: '重要度: 低', 
-        badgeClass: 'bg-slate-100 text-slate-600 border border-slate-200/90', 
-        cardAccent: 'border-l-4 border-l-slate-300' 
-    },
 };
 </script>
 
 <template>
-    <Head title="Tasks" />
+    <!-- ブラウザのタブタイトルを設定する Inertia のコンポーネント -->
+    <Head title="Tasks Dashboard" />
 
     <AuthenticatedLayout>
+        <!-- ─── トースト通知エリア（画面右上からスライドイン表示） ─── -->
+        <Transition name="slide-up">
+            <div v-if="toastMessage" class="fixed top-16 right-4 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-700">
+                <span>✨</span>
+                <span>{{ toastMessage }}</span>
+            </div>
+        </Transition>
+
+        <!-- ─── ヘッダーセクション（画面最上部のタイトルとメインアクションボタン） ─── -->
         <template #header>
             <div class="flex items-center justify-between">
-                <h2 class="font-semibold text-xl text-slate-900 tracking-tight flex items-center gap-2">
-                    <span>🧩</span> Tasks
+                <h2 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                    <span>📋</span> タスクダッシュボード
                 </h2>
-                <div class="flex items-center gap-3 text-xs font-mono">
-                    <span class="bg-slate-100 border border-slate-200 px-3 py-1 rounded-full text-slate-700 font-semibold shadow-2xs">
-                        🎯 完了ピース: {{ completedTotalCount }}件
-                    </span>
+                <div class="flex items-center gap-2">
+                    <!-- モバイル専用：サイドバードロワーを開くボタン（PC画面では非表示: lg:hidden） -->
+                    <button @click="isSidebarOpen = true" class="lg:hidden p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold shadow-xs active:scale-95 cursor-pointer">
+                        📂 メニュー
+                    </button>
+                    <!-- 新規タスク追加モーダルを開くボタン -->
+                    <button @click="isTaskModalOpen = true" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md transition active:scale-95 cursor-pointer flex items-center gap-1.5">
+                        <span>+</span> 新規タスク
+                    </button>
                 </div>
             </div>
         </template>
 
-        <div class="py-10">
-            <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+        <!-- ─── メインコンテンツ全体レイアウト ─── -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 lg:pb-12">
+            <div class="flex gap-8 items-start">
                 
-                <!-- 本日の達成状況 -->
-                <div class="mb-6 bg-white border border-slate-200/80 shadow-xs sm:rounded-2xl p-5 backdrop-blur-xl">
-                    <div class="flex items-center justify-between text-xs font-medium text-slate-600 mb-2">
-                        <span class="flex items-center gap-1.5 font-semibold text-slate-900">
-                            <span>📈</span> 本日のパズル完成度
-                        </span>
-                        <span class="font-mono">{{ completedTodayCount }} / {{ totalTodayCount }} 完了 ({{ progressPercent }}%)</span>
-                    </div>
-                    <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200/60">
-                        <div 
-                            class="bg-slate-900 h-full transition-all duration-500 rounded-full"
-                            :style="{ width: `${progressPercent}%` }"
-                        ></div>
-                    </div>
-                </div>
+                <!-- PC用サイドバー（カテゴリツリー・メニュー一覧を表示） -->
+                <DesktopSidebar :tasks="tasks" :current-category="currentCategory" :today-str="todayStr" />
 
-                <!-- メインコンテナ -->
-                <div class="bg-white border border-slate-200/80 shadow-xs sm:rounded-2xl p-6 sm:p-8 backdrop-blur-xl">
+                <!-- メインリスト領域（幅いっぱいに広がり、内部の要素を縦に積み上げる） -->
+                <div class="flex-1 min-w-0 space-y-4">
                     
-                    <!-- 高速追加フォーム -->
-                    <form @submit.prevent="submitTask" class="mb-6 flex gap-2">
-                        <input 
-                            type="text" 
-                            v-model="form.title" 
-                            placeholder="新しいピースを追加 (Enterで即座にはめ込む)..." 
-                            class="w-full bg-white border border-slate-200 focus:border-slate-900 focus:ring-slate-900 rounded-xl shadow-2xs text-sm text-slate-900 placeholder-slate-400 py-3.5 px-4 transition"
-                            autofocus
-                        />
-                        <button 
-                            type="submit" 
-                            :disabled="form.processing"
-                            class="bg-slate-900 text-white px-7 py-3.5 rounded-xl hover:bg-slate-800 active:bg-slate-950 text-sm font-medium transition shadow-sm cursor-pointer whitespace-nowrap"
-                        >
-                            ピース追加
-                        </button>
-                    </form>
+                    <!-- 検索・フィルター・ソートコントロールバー（UI層へのデータバインディング） -->
+                    <TaskControlBar 
+                        v-model:search-query="searchQuery"
+                        v-model:selected-category-filter="selectedCategoryFilter"
+                        v-model:sort-by="sortBy"
+                        :sort-order="sortOrder"
+                        :is-selection-mode="isSelectionMode"
+                        @toggle-sort-order="toggleSortOrder"
+                        @toggle-selection-mode="toggleSelectionMode"
+                    />
 
-                    <!-- タブ切り替え（各カテゴリ対応） -->
-                    <div class="flex border-b border-slate-200/80 mb-6 overflow-x-auto scrollbar-none">
-                        <button @click="activeTab = 'all'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'all' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
-                            すべて ({{ tasks.length }})
-                        </button>
-                        <button @click="activeTab = 'work'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'work' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
-                            💼 仕事 ({{ tasks.filter(t => t.category === 'work').length }})
-                        </button>
-                        <button @click="activeTab = 'private'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'private' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
-                            🏠 プライベート ({{ tasks.filter(t => t.category === 'private').length }})
-                        </button>
-                        <button @click="activeTab = 'study'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'study' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
-                            📚 学習 ({{ tasks.filter(t => t.category === 'study').length }})
-                        </button>
-                        <button @click="activeTab = 'health'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'health' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
-                            💪 健康 ({{ tasks.filter(t => t.category === 'health').length }})
-                        </button>
-                        <button @click="activeTab = 'finance'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'finance' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
-                            💰 資産 ({{ tasks.filter(t => t.category === 'finance').length }})
-                        </button>
-                        <button @click="activeTab = 'today'" :class="['py-2.5 px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition', activeTab === 'today' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800']">
-                            📅 今日 ({{ tasks.filter(t => t.due_date === todayStr).length }})
-                        </button>
-                    </div>
+                    <!-- 未完了タスク一覧セクション -->
+                    <TaskListSection 
+                        title="未完了タスク"
+                        :tasks="activeTasks"
+                        :is-selection-mode="isSelectionMode"
+                        :selected-task-ids="selectedTaskIds"
+                        :new-ids="newIds"
+                        :recently-moved-map="recentlyMovedMap"
+                        :blinking-map="blinkingMap"
+                        :show-select-all-button="true"
+                        :is-all-selected="activeTasks.length > 0 && activeTasks.every(t => selectedTaskIds.includes(t.id))"
+                        @toggle-select-all="toggleSelectActive"
+                        @toggle="toggleTask"
+                        @select="toggleTaskSelection"
+                        @delete="deleteTask"
+                        @update-title="updateTitle"
+                        @open-menu="openMenuModal"
+                    />
 
-                    <!-- 操作の案内 -->
-                    <div class="mb-6 text-xs text-slate-600 bg-slate-50 border border-slate-200/80 px-4 py-3 rounded-xl font-medium flex items-center gap-2">
-                        <span>💡</span>
-                        <span>各ピースのカテゴリをクリックすると、階層メニューから詳細な用途へ切り替えられます。</span>
-                    </div>
-
-                    <!-- タスク一覧 -->
-                    <div v-if="filteredTasks.length === 0" class="text-center py-20 text-slate-400 text-sm">
-                        タスクのピースはありません
-                    </div>
-
-                    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div 
-                            v-for="(task, index) in filteredTasks" 
-                            :key="task.id"
-                            :class="[
-                                'flex flex-col justify-between p-5 bg-white border border-slate-200/90 rounded-2xl transition-all duration-200 group shadow-2xs relative gap-4',
-                                priorityConfig[task.priority]?.cardAccent || 'border-l-4 border-l-slate-300',
-                                task.is_completed ? 'opacity-40 bg-slate-50/50' : 'hover:border-slate-300 hover:shadow-xs'
-                            ]"
-                        >
-                            <!-- 上段：アイコン、階層カテゴリ、タイトル、完了チェック -->
-                            <div class="flex items-start gap-3.5">
-                                <input 
-                                    type="checkbox" 
-                                    :checked="task.is_completed" 
-                                    @change="toggleTask(task)"
-                                    class="rounded-md border-slate-300 text-slate-900 focus:ring-slate-900 h-5 w-5 mt-0.5 cursor-pointer transition shrink-0"
-                                />
-
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 mb-1.5">
-                                        <button 
-                                            @click.stop="toggleMenu(task.id, 'category', $event)"
-                                            :class="['inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md border transition cursor-pointer', categoryTree[task.category]?.badgeClass || categoryTree.private.badgeClass]"
-                                            title="クリックしてカテゴリ階層を切替"
-                                        >
-                                            <span>{{ categoryTree[task.category]?.icon || '🏠' }}</span>
-                                            <span>{{ categoryTree[task.category]?.label || 'プライベート' }}</span>
-                                            <span class="text-slate-400 font-normal">→</span>
-                                            <span>{{ getSubCategoryMeta(task.category, task.sub_category).icon }}</span>
-                                            <span>{{ getSubCategoryMeta(task.category, task.sub_category).label }}</span>
-                                        </button>
-
-                                        <span v-if="activeTab === 'today'" class="text-[10px] text-slate-400 font-mono">
-                                            #{{ index + 1 }}
-                                        </span>
-                                    </div>
-
-                                    <!-- 階層カテゴリ変更ポップオーバーメニュー（縦長になりすぎないよう高さ制限とスクロール対応） -->
-                                    <div v-if="activeMenu.taskId === task.id && activeMenu.type === 'category'" class="absolute left-10 mt-1 w-60 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-20 max-h-72 overflow-y-auto space-y-3">
-                                        <div v-for="(pVal, pKey) in categoryTree" :key="pKey" class="px-2">
-                                            <div class="text-[10px] font-bold text-slate-400 px-2 mb-1 flex items-center gap-1">
-                                                <span>{{ pVal.icon }}</span><span>{{ pVal.label }}</span>
-                                            </div>
-                                            <div class="space-y-0.5">
-                                                <button 
-                                                    v-for="sub in pVal.items" 
-                                                    :key="sub.key" 
-                                                    @click="updateCategoryAndSub(task, pKey, sub.key)" 
-                                                    class="w-full text-left px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 rounded-lg transition flex items-center gap-2"
-                                                >
-                                                    <span>{{ sub.icon }}</span>
-                                                    <span>{{ sub.label }}</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- 編集中の入力フィールド -->
-                                    <div v-if="editingTaskId === task.id" class="mt-1">
-                                        <input 
-                                            type="text" 
-                                            v-model="editingTitle" 
-                                            @keyup.enter="saveEdit(task)"
-                                            @keyup.esc="cancelEdit"
-                                            @blur="saveEdit(task)"
-                                            autofocus
-                                            class="w-full text-base font-semibold border-slate-900 focus:ring-slate-900 rounded-lg shadow-2xs py-1.5 px-3 text-slate-900"
-                                        />
-                                    </div>
-
-                                    <!-- 通常表示（タイトル） -->
-                                    <div 
-                                        v-else 
-                                        @click="startEdit(task)"
-                                        :class="['text-base font-semibold cursor-pointer leading-snug tracking-tight mt-1', task.is_completed ? 'line-through text-slate-400 font-normal' : 'text-slate-900 hover:text-slate-950']"
-                                        title="クリックしてタイトルを編集"
-                                    >
-                                        {{ task.title }}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 下段：ピースのパーツ（重要度、期限、削除） -->
-                            <div class="flex items-center justify-between pt-3.5 border-t border-slate-100 text-xs px-0.5">
-                                <div class="flex items-center gap-1.5 flex-wrap">
-                                    <div class="relative">
-                                        <button 
-                                            @click.stop="toggleMenu(task.id, 'priority', $event)"
-                                            :class="['px-2.5 py-1.5 rounded-lg transition cursor-pointer font-medium flex items-center gap-1', priorityConfig[task.priority]?.badgeClass || priorityConfig.medium.badgeClass]"
-                                        >
-                                            <span>⚡</span>
-                                            <span>{{ priorityConfig[task.priority]?.label || '重要度: 中' }}</span>
-                                        </button>
-
-                                        <div v-if="activeMenu.taskId === task.id && activeMenu.type === 'priority'" class="absolute left-0 mt-1.5 w-32 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-20">
-                                            <button @click="updatePriority(task, 'high')" class="w-full text-left px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50 transition font-medium">⚡ 重要度: 高</button>
-                                            <button @click="updatePriority(task, 'medium')" class="w-full text-left px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-50 transition font-medium">⚡ 重要度: 中</button>
-                                            <button @click="updatePriority(task, 'low')" class="w-full text-left px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 transition font-medium">⚡ 重要度: 低</button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="flex items-center gap-2">
-                                    <div class="relative">
-                                        <button 
-                                            @click.stop="toggleMenu(task.id, 'due', $event)"
-                                            :class="['border rounded-lg px-2.5 py-1.5 transition flex items-center gap-1 cursor-pointer font-medium', task.due_date === todayStr && !task.is_completed ? 'bg-slate-900 text-white border-slate-900 shadow-2xs' : 'bg-slate-50/80 border-slate-200 text-slate-700 hover:bg-slate-100']"
-                                        >
-                                            <span>📅</span>
-                                            <span>{{ task.due_date }}</span>
-                                        </button>
-
-                                        <div v-if="activeMenu.taskId === task.id && activeMenu.type === 'due'" @click.stop class="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-20 space-y-2">
-                                            <div class="text-xs font-semibold text-slate-500 mb-1">期限を変更</div>
-                                            <div class="grid grid-cols-1 gap-1">
-                                                <button @click="updateDueDate(task, todayStr)" class="text-left px-2.5 py-1 text-xs bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-800 transition">今日 ({{ todayStr }})</button>
-                                                <button @click="updateDueDate(task, getTomorrowStr())" class="text-left px-2.5 py-1 text-xs bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-800 transition">明日 ({{ getTomorrowStr() }})</button>
-                                                <button @click="updateDueDate(task, getThisWeekendStr())" class="text-left px-2.5 py-1 text-xs bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-800 transition">今週末</button>
-                                            </div>
-                                            <div class="pt-2 border-t border-slate-100">
-                                                <input 
-                                                    type="date" 
-                                                    :value="task.due_date" 
-                                                    @change="updateDueDate(task, $event.target.value)"
-                                                    class="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 focus:border-slate-900 focus:ring-slate-900 cursor-pointer"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <button 
-                                        @click="deleteTask(task)"
-                                        class="text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition px-1.5 py-1.5 cursor-pointer rounded-lg hover:bg-rose-50"
-                                        title="削除"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- 完了済みタスク一覧セクション（完了タスクが0件の場合はDOMから非表示にする） -->
+                    <TaskListSection 
+                        v-if="completedTasksList.length > 0"
+                        title="完了済み"
+                        :tasks="completedTasksList"
+                        :is-selection-mode="isSelectionMode"
+                        :selected-task-ids="selectedTaskIds"
+                        :new-ids="newIds"
+                        :recently-moved-map="recentlyMovedMap"
+                        :blinking-map="blinkingMap"
+                        :show-select-all-button="true"
+                        :is-all-selected="completedTasksList.length > 0 && completedTasksList.every(t => selectedTaskIds.includes(t.id))"
+                        class="opacity-75"
+                        @toggle-select-all="toggleSelectCompleted"
+                        @toggle="toggleTask"
+                        @select="toggleTaskSelection"
+                        @delete="deleteTask"
+                        @update-title="updateTitle"
+                        @open-menu="openMenuModal"
+                    />
 
                 </div>
             </div>
         </div>
+
+        <!-- ─── モバイル用ドロワーメニュー（画面下部からスライドアップするモーダル背景） ─── -->
+        <Transition name="slide-up">
+            <div v-if="isSidebarOpen" @click="isSidebarOpen = false" class="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs lg:hidden flex items-end">
+                <!-- @click.stop により、内側の要素をクリックしても背景の閉じ処理が誤作動しないようにガード -->
+                <div @click.stop class="bg-white w-full rounded-t-3xl p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+                    <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto"></div>
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <span class="text-sm font-bold text-slate-900">メニュー</span>
+                        <button @click="isSidebarOpen = false" class="text-slate-400 font-bold text-xs p-1 cursor-pointer">✕</button>
+                    </div>
+                    <MobileDrawer :tasks="tasks" :current-category="currentCategory" :today-str="todayStr" @close="isSidebarOpen = false" />
+                </div>
+            </div>
+        </Transition>
+
+        <!-- ─── 各種モーダル・フローティング操作バー群 ─── -->
+        
+        <!-- 1. 新規タスク作成モーダル -->
+        <TaskFormModal :is-open="isTaskModalOpen" :form="form" @close="isTaskModalOpen = false" @submit="submitTask" />
+
+        <!-- 2. 個別タスク・一括操作用アクションモーダル（期限変更、カテゴリ変更、優先度変更など） -->
+        <TaskActionModal 
+            :active-menu-task="activeMenuTask"
+            :active-menu-type="activeMenuType"
+            @close="closeMenuModal"
+            @update-category="updateCategoryAndSub"
+            @update-priority="updatePriority"
+            @update-due="updateDueDate"
+            @bulk-update-due="bulkUpdateDueDate"
+            @bulk-update-category="bulkUpdateCategoryAndSub"
+            @bulk-update-priority="bulkUpdatePriority"
+        />
+
+        <!-- 3. 複数選択時のみ画面下部に浮上する一括アクションバー -->
+        <BulkActionBar 
+            v-if="selectedTaskIds.length > 0"
+            :selected-count="selectedTaskIds.length"
+            @complete="bulkComplete(true)"
+            @uncomplete="bulkComplete(false)"
+            @open-due-modal="openMenuModal({ id: 'bulk' }, 'bulkDue', $event)"
+            @open-category-modal="openMenuModal({ id: 'bulk' }, 'bulkCategory', $event)"
+            @open-priority-modal="openMenuModal({ id: 'bulk' }, 'bulkPriority', $event)"
+            @delete="bulkDelete"
+            @clear="selectedTaskIds = []; isSelectionMode = false;"
+        />
+
+        <!-- 4. モバイル専用ボトムナビゲーションバー（スマホ画面での常時表示ナビ） -->
+        <MobileNav 
+            :current-category="currentCategory"
+            :today-count="tasks.filter(t => t.due_date === todayStr).length"
+            :inbox-count="tasks.filter(t => t.category === 'inbox').length"
+            @open-menu="isSidebarOpen = true"
+            @open-task-modal="isTaskModalOpen = true"
+        />
+
     </AuthenticatedLayout>
 </template>

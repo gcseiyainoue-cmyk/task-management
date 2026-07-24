@@ -78,7 +78,7 @@ class TaskController extends Controller
 
         $filteredTasks = $filteredTasksQuery->oldest()->get();
 
-        return Inertia::render('Tasks/Index', [
+        return Inertia::render('Dashboard', [
             'tasks' => $allTasks,
             'filteredTasks' => $filteredTasks,
             'currentCategory' => $currentFilter, // フロントエンド側の受け取り方に合わせる変数名

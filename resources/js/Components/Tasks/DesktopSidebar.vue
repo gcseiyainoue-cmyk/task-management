@@ -1,7 +1,7 @@
 <script setup>
 /**
  * =====================================================================================
- * 【ファイル名】 TaskSidebar.vue (※想定されるファイル名)
+ * 【ファイル名】 DesktopSidebar.vue
  * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーションコンポーネント / サイドバーナビゲーション）
  * =====================================================================================
  * 【実務における設計思想】
@@ -32,7 +32,7 @@ defineProps({
             <div class="space-y-1">
                 <!-- 「今日」のタスクに絞り込むリンク -->
                 <Link 
-                    :href="route('dashboard', { category: 'today' })" 
+                    :href="route('dashboard', { view: 'today' })" 
                     :class="['w-full p-2.5 rounded-2xl text-xs font-semibold transition flex items-center justify-between px-3.5 border cursor-pointer', currentCategory === 'today' ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80']"
                 >
                     <span class="flex items-center gap-2 text-xs font-bold"><span>📅</span> 今日</span>
@@ -43,7 +43,7 @@ defineProps({
 
                 <!-- 「すべてのタスク」を表示するリンク -->
                 <Link 
-                    :href="route('dashboard', { category: 'all' })" 
+                    :href="route('dashboard', { view: 'all' })" 
                     :class="['w-full p-2.5 rounded-2xl text-xs font-semibold transition flex items-center justify-between px-3.5 border cursor-pointer', currentCategory === 'all' ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80']"
                 >
                     <span class="flex items-center gap-2 text-xs font-bold"><span>📂</span> すべてのタスク</span>

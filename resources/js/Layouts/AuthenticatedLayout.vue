@@ -1,15 +1,15 @@
 <!--
-  =====================================================================================
-  【ファイル名】 AuthenticatedLayout.vue (または Navigation/Layout系コンポーネント)
-  【アーキテクチャ上の位置づけ】 UI層（プレゼンテーション / アプリケーション共通レイアウト）
-  =====================================================================================
-  【実務における設計思想】
-  認証済みユーザー向けアプリケーション全体の共通外枠（レイアウト）を担当するコンポーネントです。
-  PC用ナビゲーションバー、モバイル用のハンバーガーメニューおよびドロップダウン、
-  ログインユーザー名やログアウト機能、さらに各画面ごとのヘッダーやメインコンテンツを差し込む
-  スロット（`<slot>` / `<slot name="header" />`）を集約しています。
-  Tailwind CSSによるガラスモーフィズム（`backdrop-blur-md`）や、レスポンシブな
-  表示切り替え（`sm:flex` / `sm:hidden`）を適用し、一貫した洗練されたUXを提供します。
+ =====================================================================================
+ 【ファイル名】 AuthenticatedLayout.vue (または Navigation/Layout系コンポーネント)
+ 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーション / アプリケーション共通レイアウト）
+ =====================================================================================
+ 【実務における設計思想】
+ 認証済みユーザー向けアプリケーション全体の共通外枠（レイアウト）を担当するコンポーネントです。
+ PC用ナビゲーションバー、モバイル用のハンバーガーメニューおよびドロップダウン、
+ ログインユーザー名やログアウト機能、さらに各画面ごとのヘッダーやメインコンテンツを差し込む
+ スロット（`<slot>` / `<slot name="header" />`）を集約しています。
+ Tailwind CSSによるガラスモーフィズム（`backdrop-blur-md`）や、レスポンシブな
+ 表示切り替え（`sm:flex` / `sm:hidden`）を適用し、一貫した洗練されたUXを提供します。
 -->
 <script setup>
 import { ref } from 'vue';
@@ -42,7 +42,7 @@ const showingNavigationDropdown = ref(false);
                                     :href="route('dashboard')" 
                                     :class="[
                                         'px-3.5 py-2 rounded-xl text-xs font-semibold transition',
-                                        route().current('dashboard*') ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                                        route().current('dashboard') ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
                                     ]"
                                 >
                                     ダッシュボード
