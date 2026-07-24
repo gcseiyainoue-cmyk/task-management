@@ -43,31 +43,45 @@ class TaskController extends Controller
 
     /**
      * タスク一覧画面の表示
-     * ログインユーザーに紐づくタスクのみを抽出し、カテゴリ別にフィルタリングして返す
+     * ログインユーザーに紐づくタスクのみを抽出し、クエリパラメータ（view / category）に応じてフィルタリングして返す
      *
-     * @param string|null $category
+     * @param Request $request
      * @return \Inertia\Response
      */
-    public function index($category = 'all')
+    public function index(Request $request)
     {
-        // ▼ ルートパラメータ省略時（null）に 'all' をフォールバックする安全策
-        $category = $category ?? 'all';
+        $view = $request->input('view');         // 例: 'today', 'all' など
+        $category = $request->input('category'); // 例: 'work', 'personal' など
 
         // ▼ ログインユーザーに紐づくタスクのクエリをベースにする
         $userTasksQuery = Auth::user()->tasks();
 
         $allTasks = (clone $userTasksQuery)->oldest()->get();
+        $filteredTasksQuery = clone $userTasksQuery;
 
-        $filteredTasks = match ($category) {
-            'today' => (clone $userTasksQuery)->where('due_date', now()->toDateString())->oldest()->get(),
-            'all' => $allTasks,
-            default => (clone $userTasksQuery)->where('category', $category)->oldest()->get(),
-        };
+        // 絞り込み条件の判定
+        if ($category) {
+            // カテゴリ指定がある場合
+            $filteredTasksQuery->where('category', $category);
+            $currentFilter = $category;
+        } else {
+            // ビュー指定がある場合（デフォルトは 'today'）
+            $view = $view ?? 'today';
+            
+            if ($view === 'today') {
+                $filteredTasksQuery->where('due_date', now()->toDateString());
+            }
+            // 'all' の場合は追加の絞り込みなし
+            
+            $currentFilter = $view;
+        }
+
+        $filteredTasks = $filteredTasksQuery->oldest()->get();
 
         return Inertia::render('Tasks/Index', [
             'tasks' => $allTasks,
             'filteredTasks' => $filteredTasks,
-            'currentCategory' => $category,
+            'currentCategory' => $currentFilter, // フロントエンド側の受け取り方に合わせる変数名
         ]);
     }
 

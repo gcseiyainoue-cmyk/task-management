@@ -9,7 +9,7 @@
  * 認証（auth）およびメール認証（verified）ミドルウェアによってアクセス制御を行い、
  * 画面遷移（Inertia::render）とデータ操作（TaskControllerの各アクション）の経路を整理しています。
  * 特に、静的なパス（/dashboard/code-guide や /tasks/bulk など）を動的パラメータ
- * （{category?} や {task}）を含むパスよりも上に記述することで、Laravelのルーティングにおける
+ * （{task} など）を含むパスよりも上に記述することで、Laravelのルーティングにおける
  * 意図しないマッチング（競合バグ）を防ぐ堅牢な順序設計がなされています。
  */
 
@@ -35,8 +35,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return Inertia::render('DashboardCodeGuide');
     })->name('dashboard.code-guide');
 
-    // 5大カテゴリ別の個別ページ（ルート名を 'dashboard' に統一）
-    Route::get('/dashboard/{category?}', [TaskController::class, 'index'])->name('dashboard');
+    // ダッシュボードメインページ（※ パスパラメータを撤廃し、ビューやカテゴリはクエリパラメータで制御）
+    Route::get('/dashboard', [TaskController::class, 'index'])->name('dashboard');
 
     // タスク管理の使い方ガイドページ
     Route::get('/tasks/guide', function () {
