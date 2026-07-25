@@ -23,7 +23,7 @@ const submit = () => {
         :auth-route="route('login')"
         auth-route-text="ログイン"
     >
-        <Head title="パスワード再設定 - Tasks" />
+        <Head title="パスワード再設定" />
 
         <div class="mb-6 text-center">
             <h1 class="text-xl font-bold text-slate-900 tracking-tight mb-2">パスワードをお忘れですか？</h1>

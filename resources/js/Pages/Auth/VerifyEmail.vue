@@ -25,7 +25,7 @@ const verificationLinkSent = computed(
         :auth-route="route('logout')"
         auth-route-text="ログアウト"
     >
-        <Head title="メールアドレス確認 - Tasks" />
+        <Head title="メールアドレス確認" />
 
         <div class="mb-6 text-center">
             <h1 class="text-xl font-bold text-slate-900 tracking-tight mb-2">メールアドレスの確認</h1>

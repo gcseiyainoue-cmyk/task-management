@@ -18,7 +18,7 @@ const submit = () => {
         :auth-route="route('logout')"
         auth-route-text="ログアウト"
     >
-        <Head title="パスワード確認 - Tasks" />
+        <Head title="パスワード確認" />
 
         <div class="mb-6 text-center">
             <h1 class="text-xl font-bold text-slate-900 tracking-tight mb-2">パスワードの確認</h1>

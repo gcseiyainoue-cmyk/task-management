@@ -8,7 +8,7 @@ defineProps({
 </script>
 
 <template>
-    <Head title="Welcome - Tasks" />
+    <Head title="" />
 
     <div class="min-h-screen bg-slate-50/50 text-slate-900 font-sans antialiased selection:bg-slate-900 selection:text-white flex flex-col justify-between">
         <!-- ヘッダー -->

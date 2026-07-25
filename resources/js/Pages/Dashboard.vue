@@ -166,7 +166,7 @@ const submitTask = () => {
 
 <template>
     <!-- ブラウザのタブタイトルを設定する Inertia のコンポーネント -->
-    <Head title="Tasks Dashboard" />
+    <Head title="ダッシュボード" />
 
     <AuthenticatedLayout>
         <!-- ─── トースト通知エリア（画面右上からスライドイン表示） ─── -->

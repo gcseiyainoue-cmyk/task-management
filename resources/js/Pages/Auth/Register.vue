@@ -22,7 +22,7 @@ const submit = () => {
         :auth-route="route('login')"
         auth-route-text="ログイン"
     >
-        <Head title="新規登録 - Tasks" />
+        <Head title="新規登録" />
 
         <div class="mb-6 text-center">
             <h1 class="text-xl font-bold text-slate-900 tracking-tight mb-1">アカウントを作成</h1>

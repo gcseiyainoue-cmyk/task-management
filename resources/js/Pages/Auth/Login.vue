@@ -26,7 +26,7 @@ const submit = () => {
         :auth-route="route('register')"
         auth-route-text="新規登録"
     >
-        <Head title="ログイン - Tasks" />
+        <Head title="ログイン" />
 
         <div class="mb-6 text-center">
             <h1 class="text-xl font-bold text-slate-900 tracking-tight mb-1">おかえりなさい</h1>
