@@ -59,34 +59,43 @@ class TaskSeeder extends Seeder
             ['category' => 'inbox', 'sub' => 'general', 'titles' => ['後で読むブックマークの整理', 'PCデスクトップのファイル整理', '気になったアイデアのメモ書き', '未整理のメールチェックと返信']],
         ];
 
-        $offsets = [0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 9, 11, 14];
+        $offsets = [0, 1, 1, 2, 3, 4, 5, 6, 7, 9, 11, 14];
         $priorities = ['high', 'medium', 'low'];
 
-        // 各ユーザーごとにタスクを生成して割り当てる
         $users = [$user1, $user2];
 
         foreach ($users as $user) {
             $tasks = [];
             $createdTitles = [];
 
-            // 各ユーザーに15件ずつタスクを生成
+            // ★ 毎固定で「当日2件」「昨日（期限切れ）1件」を確定させる枠を作る
+            $mustHaveOffsets = [0, 0, -1];
+
             while (count($tasks) < 15) {
                 $pool = $pools[array_rand($pools)];
                 $title = $pool['titles'][array_rand($pool['titles'])];
 
                 if (!in_array($title, $createdTitles)) {
                     $createdTitles[] = $title;
-                    $offset = $offsets[array_rand($offsets)];
+
+                    // 確定枠が残っていればそれを使い、無くなればランダム枠から選ぶ
+                    if (!empty($mustHaveOffsets)) {
+                        $offset = array_shift($mustHaveOffsets);
+                    } else {
+                        $offset = $offsets[array_rand($offsets)];
+                    }
+
                     $priority = $priorities[array_rand($priorities)];
 
                     $tasks[] = [
-                        'user_id' => $user->id, // ユーザーIDを紐付け
+                        'user_id' => $user->id,
                         'title' => $title,
                         'category' => $pool['category'],
                         'sub_category' => $pool['sub'],
                         'priority' => $priority,
                         'due_date' => Carbon::today()->addDays($offset)->toDateString(),
-                        'is_completed' => (rand(1, 100) <= 15), // 15%の確率で完了済み
+                        // 当日のタスクは確認しやすいように未完了（false）で固定
+                        'is_completed' => ($offset === 0) ? false : (rand(1, 100) <= 15),
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
