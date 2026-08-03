@@ -15,27 +15,60 @@
 
 import TaskItem from '@/Components/Tasks/TaskItem.vue';
 
-// --- プロパティの定義（セクションタイトル、タスク配列、一括選択モードの状態管理群） ---
+// --- プロパティの定義（親コンポーネントから受け取るデータ群） ---
 defineProps({
+    // セクションの見出し文字列（タスクリストのグループ名やカテゴリ名を表示するために使用）
     title: String,
-    tasks: Array,
-    isSelectionMode: Boolean,
-    selectedTaskIds: Array,
-    newIds: Array,
-    recentlyMovedMap: Object,
-    blinkingMap: Object,
-    showSelectAllButton: Boolean,
-    isAllSelected: Boolean,
+    // 表示対象のタスクデータの配列（セクション内に属するタスク一覧をレンダリングするために使用）
+    tasks: {
+        type: Array,
+        default: () => [],
+    },
+    // 一括選択モードが有効かどうかを示すフラグ（各タスク行のチェックボックス表示や一括操作機能を制御するために使用）
+    isSelectionMode: {
+        type: Boolean,
+        default: false,
+    },
+    // 現在選択されているタスクのID群の配列（一括操作の対象管理やチェックボックスの選択状態を判定するために使用）
+    selectedTaskIds: {
+        type: Array,
+        default: () => [],
+    },
+    // 新規追加されたタスクのID群の配列（新しく追加されたタスクを視覚的に強調表示するために使用）
+    newIds: {
+        type: Array,
+        default: () => [],
+    },
+    // 最近移動されたタスクのIDをキーに持つマップ（移動アニメーションやハイライト状態を制御するために使用）
+    recentlyMovedMap: {
+        type: Object,
+        default: () => ({}),
+    },
+    // 点滅演出の対象となるタスクのIDをキーに持つマップ（ユーザーに注意喚起が必要なタスクを点滅させるために使用）
+    blinkingMap: {
+        type: Object,
+        default: () => ({}),
+    },
+    // 「すべて選択」ボタンを表示するかどうかを示すフラグ（一括選択時の全選択・全解除アクションの導線を制御するために使用）
+    showSelectAllButton: {
+        type: Boolean,
+        default: false,
+    },
+    // 現在のセクション内のタスクがすべて選択されているかどうかを示すフラグ（「すべて選択」ボタンのチェック状態や表示切り替えに使用）
+    isAllSelected: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 // --- イベント定義（一括選択切替、単体選択、削除、タイトル更新、メニューオープン等の通知） ---
 defineEmits([
-    'toggleSelectAll',
-    'toggle',
-    'select',
-    'delete',
-    'updateTitle',
-    'openMenu'
+    'toggleSelectAll',   // 一括選択/解除の切り替え
+    'toggle',            // タスクの完了/未完了の切り替え
+    'select',            // タスクの個別の選択/非選択の切り替え
+    'delete',            // タスクの削除
+    'updateTitle',       // タスクタイトルのインライン更新
+    'openMenu'           // 各種操作メニュー（アクションモーダル）のオープン
 ]);
 </script>
 
@@ -70,9 +103,9 @@ defineEmits([
                 :key="task.id"
                 :task="task"
                 :is-selection-mode="isSelectionMode"
-                :is-selected="selectedTaskIds.includes(task.id)"
-                :is-highlighted="newIds.includes(task.id) || recentlyMovedMap[task.id]"
-                :is-flashing="blinkingMap[task.id] || recentlyMovedMap[task.id]"
+                :is-selected="selectedTaskIds?.includes(task.id)"
+                :is-highlighted="newIds?.includes(task.id) || recentlyMovedMap?.[task.id]"
+                :is-flashing="blinkingMap?.[task.id] || recentlyMovedMap?.[task.id]"
                 @toggle="$emit('toggle', $event)"
                 @select="$emit('select', $event)"
                 @delete="$emit('delete', $event)"

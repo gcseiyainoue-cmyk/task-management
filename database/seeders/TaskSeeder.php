@@ -33,6 +33,7 @@ class TaskSeeder extends Seeder
             ]
         );
 
+        // 単発タスクのプール定義
         $pools = [
             ['category' => 'work', 'sub' => 'project', 'titles' => ['Q3プロジェクトのキックオフ資料作成', 'クライアント向け進捗レポートのまとめ', '新機能の要件定義レビュー', 'デザインモックアップのフィードバック反映']],
             ['category' => 'work', 'sub' => 'meeting', 'titles' => ['週次定例ミーティングの準備', 'デザインチームとのすり合わせ', 'クライアントとのキックオフ面談']],
@@ -40,7 +41,7 @@ class TaskSeeder extends Seeder
             ['category' => 'work', 'sub' => 'admin', 'titles' => ['経費精算書の提出と承認確認', '今週の工数入力とタスク整理']],
             
             ['category' => 'personal', 'sub' => 'shopping', 'titles' => ['日用品（洗剤・ティッシュ）のまとめ買い', 'スーパーで今週末の食材調達', 'コーヒー豆の買い出し']],
-            ['category' => 'personal', 'sub' => 'housework', 'titles' => ['部屋全体の掃除機かけと換気', 'たまった洗濯物の整理とアイロンがけ', '水回り（キッチン・浴室）の清掃']],
+            ['category' => 'personal', 'sub' => 'housework', 'titles' => ['たまった洗濯物の整理とアイロンがけ', '水回り（キッチン・浴室）の清掃']],
             ['category' => 'personal', 'sub' => 'family', 'titles' => ['実家の両親へ近況連絡の電話', '週末の家族ディナーのお店予約']],
             ['category' => 'personal', 'sub' => 'event', 'titles' => ['友人との週末の予定調整', '映画のチケット事前予約']],
             
@@ -68,7 +69,7 @@ class TaskSeeder extends Seeder
             $tasks = [];
             $createdTitles = [];
 
-            // ★ 毎固定で「当日2件」「昨日（期限切れ）1件」を確定させる枠を作る
+            // 当日2件、昨日1件の期限切れタスクを確定で生成
             $mustHaveOffsets = [0, 0, -1];
 
             while (count($tasks) < 15) {
@@ -78,7 +79,6 @@ class TaskSeeder extends Seeder
                 if (!in_array($title, $createdTitles)) {
                     $createdTitles[] = $title;
 
-                    // 確定枠が残っていればそれを使い、無くなればランダム枠から選ぶ
                     if (!empty($mustHaveOffsets)) {
                         $offset = array_shift($mustHaveOffsets);
                     } else {
@@ -89,12 +89,12 @@ class TaskSeeder extends Seeder
 
                     $tasks[] = [
                         'user_id' => $user->id,
+                        'routine_template_id' => null,
                         'title' => $title,
                         'category' => $pool['category'],
                         'sub_category' => $pool['sub'],
                         'priority' => $priority,
                         'due_date' => Carbon::today()->addDays($offset)->toDateString(),
-                        // 当日のタスクは確認しやすいように未完了（false）で固定
                         'is_completed' => ($offset === 0) ? false : (rand(1, 100) <= 15),
                         'created_at' => now(),
                         'updated_at' => now(),

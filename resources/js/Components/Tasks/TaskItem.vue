@@ -6,27 +6,35 @@
  * =====================================================================================
  * 【実務における設計思想】
  * 各タスクの表示、インライン編集、完了/未完了の状態遷移アニメーション、一括選択モード時のチェック制御、
- * および各メタデータ（カテゴリ、重要度、期日）の変更メニュー呼び出しを担うコンポーネントです。
- * 複雑な状態変更やアニメーションのライフサイクル管理はカスタムフック（useTaskItem）に委譲し、
- * コンポーネント側は純粋なUI描画とユーザー操作のイベント発火（Data Down, Actions Up）に徹しています。
+ * および各メタデータ（カテゴリ、重要度、期日、ルーティン状態）の変更メニュー呼び出しを担うコンポーネントです。
+ * スッキリとしたスリムなアイコン配置により、視覚的なややこしさを解消しています。
  */
 
 import { categoryTree, priorityConfig } from '@/Constants/task';
 import { useTaskItem } from '@/Composables/useTaskItem';
 
-// --- プロパティの定義（親リストから受け取るタスクデータおよび各種状態フラグ） ---
+// --- プロパティの定義（親コンポーネントから受け取るデータ群） ---
 const props = defineProps({
+    // 各タスクの詳細データオブジェクト（タスク名や期日、ステータスなどの情報を表示・操作するために使用）
     task: Object,
+    // 一括選択モードが有効かどうかを示すフラグ（各タスク行に選択用チェックボックスを表示制御するために使用）
     isSelectionMode: Boolean,
+    // このタスクが現在選択されているかどうかを示すフラグ（チェックボックスの選択状態や行の背景色変更に使用）
     isSelected: Boolean,
+    // このタスクがハイライト表示されるべきかどうかを示すフラグ（特定の条件に合致したタスクを視覚的に強調するために使用）
     isHighlighted: Boolean,
+    // このタスクが点滅アニメーションの対象かどうかを示すフラグ（更新や操作が行われたタスクをユーザーに注意喚起するために使用）
     isFlashing: Boolean,
 });
 
 // --- イベント定義（親やロジック層へ通知するアクション群） ---
 const emit = defineEmits([
-    'toggle', 'select', 'delete', 'update-title', 
-    'open-menu', 'action-handled'
+    'toggle',         // タスクの完了/未完了の切り替え通知
+    'select',         // 一括選択モード時のチェック状態切り替え通知
+    'delete',         // タスクの削除通知
+    'update-title',   // インライン編集によるタイトル更新通知
+    'open-menu',      // 各種メタデータ変更用メニュー（アクションモーダル）のオープン通知
+    'action-handled'  // アクション処理完了の通知
 ]);
 
 // --- ロジック層（useTaskItem）からの状態・操作関数のインポート ---
@@ -128,7 +136,7 @@ const {
             </div>
         </Transition>
 
-        <!-- ─── メインコンテンツ領域（左側：チェックボックス・完了ボタン・タイトル・カテゴリ） ─── -->
+        <!-- ─── メインコンテンツ領域（左側） ─── -->
         <div class="flex items-center gap-3 min-w-0 flex-1 w-full">
             <!-- 一括選択モード時のチェックボックス -->
             <Transition name="fade">
@@ -193,19 +201,35 @@ const {
                         class="w-full text-xs sm:text-sm font-bold border-slate-900 rounded-xl py-1.5 px-3 text-slate-900 shadow-inner bg-white"
                     />
                 </div>
-                <!-- 通常表示時のタイトル（クリックでインライン編集開始） -->
+                <!-- 通常表示時のタイトル ＆ ルーティンバッジ -->
                 <div 
                     v-else 
                     @click.stop="isSelectionMode ? handleCardClick() : startEdit(task)"
-                    :class="[
+                    class="flex items-center gap-2 flex-wrap min-w-0"
+                >
+                    <span :class="[
                         'text-xs sm:text-sm font-bold leading-normal tracking-tight transition-all duration-700 ease-out py-0.5 break-words min-w-0 cursor-pointer',
                         (task.is_completed || isCompleting) && !isRestoring ? 'line-through text-slate-400 opacity-70' : 'text-slate-900 hover:text-indigo-600'
-                    ]"
-                >
-                    {{ task.title }}
+                    ]">
+                        {{ task.title }}
+                    </span>
+
+                    <!-- タイトル横のアイコン風ルーティンバッジ -->
+                    <span 
+                        v-if="task.routine_template_id" 
+                        :class="[
+                            'flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold border',
+                            task.routine_template?.is_active === true 
+                                ? 'bg-indigo-50 text-indigo-600 border-indigo-200' 
+                                : 'bg-slate-100 text-slate-500 border-slate-200'
+                        ]"
+                        :title="task.routine_template?.is_active === true ? 'ルーティンから生成されたタスク' : '停止中のルーティン'"
+                    >
+                        🔄 {{ task.routine_template?.is_active === true ? 'ルーティン' : 'ルーティン (停止中)' }}
+                    </span>
                 </div>
 
-                <!-- カテゴリ・サブカテゴリバッジ（クリックでメニューポップアップ起動） -->
+                <!-- カテゴリバッジ -->
                 <div class="flex items-center gap-1.5 flex-wrap">
                     <button 
                         @click.stop="$emit('open-menu', task, 'category', $event)"
@@ -222,7 +246,7 @@ const {
             </div>
         </div>
 
-        <!-- ─── メタデータ領域（右側：重要度、期日、作成日時、削除ボタン） ─── -->
+        <!-- ─── メタデータ領域（右側） ─── -->
         <div class="flex items-center justify-between sm:justify-end gap-1.5 pt-2 sm:pt-0 border-t border-slate-100 sm:border-t-0 shrink-0 w-full sm:w-auto">
             <div class="flex items-center gap-1.5 flex-wrap">
                 <!-- 優先度変更ボタン -->
@@ -241,22 +265,29 @@ const {
                     :class="['border rounded-xl px-2.5 py-1 transition flex items-center gap-1 cursor-pointer font-bold active:scale-95 shadow-2xs text-[11px] whitespace-nowrap shrink-0', getDueDateBadgeClass(task.due_date, task.is_completed)]"
                 >
                     <span>📅</span>
-                    <span>{{ task.due_date }}</span>
+                    <span>期限: {{ task.due_date }}</span>
                     <span class="text-[9px] opacity-60">▼</span>
                 </button>
 
-                <!-- 作成日時表示 -->
-                <div 
-                    v-if="task.created_at" 
-                    class="px-2 py-1 rounded-xl bg-slate-100/60 text-slate-400 text-[10px] font-medium flex items-center gap-1 shrink-0 whitespace-nowrap select-none" 
-                    title="作成日時"
+                <!-- 🔄 ルーティンボタン -->
+                <button 
+                    @click.stop="$emit('open-menu', task, 'routine', $event)"
+                    :class="[
+                        'px-2.5 py-1 rounded-xl transition cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs border text-[11px] font-bold whitespace-nowrap shrink-0',
+                        task.routine_template_id && task.routine_template?.is_active === true
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' 
+                            : task.routine_template_id && task.routine_template?.is_active === false
+                            ? 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-indigo-600'
+                    ]"
+                    :title="task.routine_template_id ? (task.routine_template?.is_active === true ? 'ルーティン設定中（クリックで解除）' : 'ルーティン停止中') : 'タスクをルーティン化する'"
                 >
-                    <span>🕒</span>
-                    <span>作成: {{ formatCreatedAt(task.created_at) }}</span>
-                </div>
+                    <span>🔄</span>
+                    <span>ルーティン</span>
+                </button>
             </div>
 
-            <!-- 削除ボタン（ホバー時または常時表示） -->
+            <!-- 削除ボタン -->
             <button 
                 @click.stop="$emit('delete', task)"
                 class="text-slate-300 hover:text-rose-600 sm:opacity-0 sm:group-hover:opacity-100 transition p-1.5 cursor-pointer rounded-xl hover:bg-rose-50 shrink-0 ml-auto sm:ml-0"

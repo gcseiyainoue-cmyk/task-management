@@ -13,25 +13,39 @@
 
 import { ref } from 'vue';
 
+/**
+ * タスクの選択状態および一括選択ロジックを提供するComposable
+ * @param {Object} activeTasks - 未完了タスクの配列を保持するリアクティブ参照
+ * @param {Object} completedTasksList - 完了済みタスクの配列を保持するリアクティブ参照
+ * @returns {Object} 選択モードや選択IDリスト、各種選択切り替えハンドラー群
+ */
 export function useTaskSelection(activeTasks, completedTasksList) {
     // --- ローカルステート（選択モードの有効フラグ、選択されたタスクIDの配列） ---
     const isSelectionMode = ref(false);
     const selectedTaskIds = ref([]);
 
-    // --- 選択モード自体の切り替え（モード解除時は選択IDリストもリセット） ---
+    /**
+     * 選択モード自体の有効・無効を切り替える関数
+     * モード解除時は選択IDリストも自動的にリセットされます。
+     */
     const toggleSelectionMode = () => {
         isSelectionMode.value = !isSelectionMode.value;
         if (!isSelectionMode.value) selectedTaskIds.value = [];
     };
 
-    // --- 個別タスクの選択・非選択をトグル ---
+    /**
+     * 個別タスクの選択・非選択状態を切り替える関数
+     * @param {Number|String} taskId - 対象のタスクID
+     */
     const toggleTaskSelection = (taskId) => {
         const idx = selectedTaskIds.value.indexOf(taskId);
         if (idx > -1) selectedTaskIds.value.splice(idx, 1);
         else selectedTaskIds.value.push(taskId);
     };
 
-    // --- 未完了タスクグループの一括選択 / 解除 ---
+    /**
+     * 未完了タスクグループ全体の一括選択・解除を切り替える関数
+     */
     const toggleSelectActive = () => {
         const activeIds = activeTasks.value.map(t => t.id);
         const allActiveSelected = activeIds.every(id => selectedTaskIds.value.includes(id));
@@ -43,7 +57,9 @@ export function useTaskSelection(activeTasks, completedTasksList) {
         }
     };
 
-    // --- 完了済みタスクグループの一括選択 / 解除 ---
+    /**
+     * 完了済みタスクグループ全体の一括選択・解除を切り替える関数
+     */
     const toggleSelectCompleted = () => {
         const completedIds = completedTasksList.value.map(t => t.id);
         const allCompletedSelected = completedIds.every(id => selectedTaskIds.value.includes(id));

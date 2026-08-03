@@ -16,14 +16,19 @@ import { ref } from 'vue';
 import { categoryTree } from '@/Constants/task';
 import { useSmartTaskCreate } from '@/Composables/useSmartTaskCreate';
 
-// --- プロパティの定義（モーダル表示状態、通常作成用 Inertia form オブジェクト） ---
+// --- プロパティの定義（親コンポーネントから受け取るデータ群） ---
 const props = defineProps({
+    // モダルが現在開いているかどうかを示すフラグ（表示・非表示の切り替え制御に使用）
     isOpen: Boolean,
+    // タスク作成・編集用のInertiaフォームオブジェクト（入力値の保持やバリデーションエラーの管理に使用）
     form: Object, 
 });
 
 // --- イベント定義（モーダル閉鎖およびフォーム送信の通知） ---
-const emit = defineEmits(['close', 'submit']);
+const emit = defineEmits([
+    'close',   // モーダルを閉じる通知
+    'submit'   // 通常作成モードでのフォーム送信通知
+]);
 
 // --- モード管理 ('single': 通常作成, 'smart': スマート一括入力) ---
 const mode = ref('single');

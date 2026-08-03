@@ -13,23 +13,28 @@
 
 import { categoryTree } from '@/Constants/task';
 
-// --- プロパティの定義（親から受け取る表示・状態データ） ---
+// --- プロパティの定義（親コンポーネントから受け取るデータ群） ---
 defineProps({
-    searchQuery: String,            // 検索キーワード
-    selectedCategoryFilter: String, // 選択中のカテゴリフィルター
-    sortBy: String,                 // ソート基準（due_date, created_at, priority）
-    sortOrder: String,              // ソート順（asc, desc）
-    isSelectionMode: Boolean,       // 一括選択モードが有効かどうか
+    // 現在入力されている検索クエリ文字列（タスクのリアルタイム絞り込み検索に使用）
+    searchQuery: String,
+    // 現在選択されているカテゴリのフィルター条件（タスク一覧の絞り込み表示に使用）
+    selectedCategoryFilter: String,
+    // 現在適用されているソート基準（期限や作成日、優先度などの並び替え軸を指定するために使用）
+    sortBy: String,
+    // 現在適用されているソート順序（昇順 'asc' または降順 'desc' を指定するために使用）
+    sortOrder: String,
+    // 一括選択モードが有効かどうかを示すフラグ（複数選択用のチェックボックスや一括操作バーの表示制御に使用）
+    isSelectionMode: Boolean,
 });
 
 // --- イベント定義（親へ通知するアクション群） ---
 // Vue 3の v-model パターン（update:xxx）とカスタムアクションを明確に分離しています
 defineEmits([
-    'update:searchQuery',
-    'update:selectedCategoryFilter',
-    'update:sortBy',
-    'toggleSortOrder',
-    'toggleSelectionMode'
+    'update:searchQuery',            // 検索キーワードの更新通知（v-model用）
+    'update:selectedCategoryFilter', // 選択中カテゴリフィルターの更新通知（v-model用）
+    'update:sortBy',                 // ソート基準の更新通知（v-model用）
+    'toggleSortOrder',               // 昇順/降順の切り替え通知
+    'toggleSelectionMode'            // 一括選択モードの有効/無効切り替え通知
 ]);
 </script>
 

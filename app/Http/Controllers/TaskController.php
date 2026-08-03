@@ -18,11 +18,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Task;
+use App\Services\RoutineService;
 use App\Services\SmartTaskParserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Inertia\Inertia;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use IneFoundatiortia\Inertia;
+use Illuminate\n\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\RedirectResponse;
+use Inertia\Response;
 
 class TaskController extends Controller
 {
@@ -34,44 +37,67 @@ class TaskController extends Controller
     protected SmartTaskParserService $parserService;
 
     /**
-     * コンストラクタ依存性注入によるサービスの初期化
+     * ルーティン自動生成サービスのインスタンス
      */
-    public function __construct(SmartTaskParserService $parserService)
-    {
+    protected RoutineService $routineService; 
+
+    /**
+     * コンストラクタ依存性注入によるサービスの初期化
+     * 
+     * @param SmartTaskParserService $parserService
+     * @param RoutineService $routineService
+     */
+    public function __construct(
+        SmartTaskParserService $parserService,
+        RoutineService $routineService 
+    ) {
         $this->parserService = $parserService;
+        $this->routineService = $routineService; 
     }
 
     /**
-     * タスク一覧画面の表示
-     * ログインユーザーに紐づくタスクのみを抽出し、クエリパラメータ（view / category）に応じてフィルタリングして返す
+     * =====================================================================================
+     * 【メソッド名】 index
+     * 【概要】 タスク一覧画面の表示処理
+     * =====================================================================================
+     * ログインユーザーに紐づくタスクのみを抽出し、クエリパラメータ（view / category）に応じて
+     * フィルタリングして返すとともに、ルーティンテンプレート一覧をフロントエンドへ提供します。
      *
-     * @param Request $request
-     * @return \Inertia\Response
+     * @param Request $request HTTPリクエストインスタンス
+     * @return Response Inertiaレスポンス（Dashboard画面）
      */
-    public function index(Request $request)
+    public function index(Request $request): Response
     {
-        $view = $request->input('view');         // 例: 'today', 'all' など
-        $category = $request->input('category'); // 例: 'work', 'personal' など
+        $user = Auth::user();
 
-        // ▼ ログインユーザーに紐づくタスクのクエリをベースにする
-        $userTasksQuery = Auth::user()->tasks();
+        // 1. 今日のルーティンタスクが未作成なら自動生成
+        $this->routineService->generateDailyTasksForUser($user);
 
+        $view = $request->input('view');         // 例: 'today', 'all', 'routines' など
+        $category = $request->input('category'); // 例: 'work', 'routines' など
+
+        // 2. ルーティンテンプレート一覧の取得（サイドバーのバッジやルーティン管理画面で使用）
+        $routineTemplates = $user->routineTemplates()->latest()->get();
+
+        // 3. タスク取得時に routineTemplate リレーションを一緒にEager Loadingする
+        $userTasksQuery = $user->tasks()->with('routineTemplate');
         $allTasks = (clone $userTasksQuery)->oldest()->get();
         $filteredTasksQuery = clone $userTasksQuery;
 
-        // 絞り込み条件の判定
-        if ($category) {
-            // カテゴリ指定がある場合
+        $currentFilter = '';
+
+        // 4. 絞り込み条件の判定
+        if ($category === 'routines' || $view === 'routines') {
+            $currentFilter = 'routines';
+        } elseif ($category) {
             $filteredTasksQuery->where('category', $category);
             $currentFilter = $category;
         } else {
-            // ビュー指定がある場合（デフォルトは 'today'）
             $view = $view ?? 'today';
             
             if ($view === 'today') {
                 $filteredTasksQuery->where('due_date', now()->toDateString());
             }
-            // 'all' の場合は追加の絞り込みなし
             
             $currentFilter = $view;
         }
@@ -81,52 +107,67 @@ class TaskController extends Controller
         return Inertia::render('Dashboard', [
             'tasks' => $allTasks,
             'filteredTasks' => $filteredTasks,
-            'currentCategory' => $currentFilter, // フロントエンド側の受け取り方に合わせる変数名
+            'routineTemplates' => $routineTemplates, 
+            'currentCategory' => $currentFilter,    
+            'currentView' => $view,
         ]);
     }
 
     /**
-     * 単一タスクの新規作成処理
-     * リクエスト内容をバリデーション後、パーサーで解析し、ログインユーザーに紐づけて保存する
+     * =====================================================================================
+     * 【メソッド名】 store
+     * 【概要】 単一タスクの新規作成処理
+     * =====================================================================================
+     * リクエスト内容をバリデーション後、パーサーで解析し、ログインユーザーに紐づけて安全に保存します。
      *
-     * @param Request $request
-     * @return \Illuminate\Http\RedirectResponse
+     * @param Request $request HTTPリクエストインスタンス
+     * @return RedirectResponse 処理完了後のリダイレクトレスポンス
      */
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
+        // リクエストデータのバリデーション（カテゴリや優先度は未指定を許容）
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'due_date' => 'nullable|date',
-            'category' => 'required|in:inbox,work,personal,growth,health,finance',
+            'category' => 'nullable|in:inbox,work,personal,growth,health,finance',
             'sub_category' => 'nullable|string',
-            'priority' => 'required|in:high,medium,low',
+            'priority' => 'nullable|in:high,medium,low',
         ]);
 
+        // SmartTaskParserServiceを使用してタイトル文字列からタグやキーワードを解析
         $parsed = $this->parserService->parse($validated['title']);
 
+        // 明示的なリクエスト値とパーサーによる解析結果を統合してタスクデータを構築
         $taskData = [
             'title' => $parsed['title'],
             'due_date' => $validated['due_date'] ?? $parsed['due_date'],
-            'category' => $validated['category'] !== 'inbox' ? $validated['category'] : $parsed['category'],
+            'category' => isset($validated['category']) && $validated['category'] !== 'inbox' 
+                ? $validated['category'] 
+                : $parsed['category'],
             'sub_category' => $validated['sub_category'] ?? $parsed['sub_category'],
-            'priority' => $validated['priority'] !== 'medium' ? $validated['priority'] : $parsed['priority'],
+            'priority' => isset($validated['priority']) && $validated['priority'] !== 'medium' 
+                ? $validated['priority'] 
+                : $parsed['priority'],
             'is_completed' => false,
         ];
 
-        // ▼ ログインユーザーのリレーションを介して作成し、user_idを自動付与する
+        // ログインユーザーのリレーションを介してタスクを新規作成し、外部キーを自動付与
         $task = Auth::user()->tasks()->create($taskData);
 
         return redirect()->back()->with('new_task_ids', [$task->id]);
     }
-
+    
     /**
-     * 複数行テキストからのタスク一括作成処理
-     * 改行区切りのテキストを解析し、すべてのタスクをログインユーザーに紐づけて一括登録する
+     * =====================================================================================
+     * 【メソッド名】 storeBulk
+     * 【概要】 複数行テキストからのタスク一括作成処理
+     * =====================================================================================
+     * 改行区切りのテキストを解析し、すべてのタスクをログインユーザーに紐づけて一括登録します。
      *
-     * @param Request $request
-     * @return \Illuminate\Http\RedirectResponse
+     * @param Request $request HTTPリクエストインスタンス
+     * @return RedirectResponse 処理完了後のリダイレクトレスポンス
      */
-    public function storeBulk(Request $request)
+    public function storeBulk(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'raw_text' => ['required', 'string'],
@@ -140,7 +181,7 @@ class TaskController extends Controller
         
         $lines->each(function ($line) use (&$newTaskIds) {
             $taskData = $this->parserService->parse($line);
-            // ▼ 一括作成時もログインユーザーに紐づけて安全に登録する
+            // 一括作成時もログインユーザーに紐づけて安全に登録する
             $task = Auth::user()->tasks()->create($taskData);
             $newTaskIds[] = $task->id;
         });
@@ -149,16 +190,19 @@ class TaskController extends Controller
     }
 
     /**
-     * タスクの更新処理
-     * TaskPolicy による所有権・認可チェックを実行し、許可された場合のみ更新を適用する
+     * =====================================================================================
+     * 【メソッド名】 update
+     * 【概要】 タスクの更新処理
+     * =====================================================================================
+     * TaskPolicy による所有権・認可チェックを実行し、許可された場合のみ更新を適用します。
      *
-     * @param Request $request
-     * @param Task $task
-     * @return \Illuminate\Http\RedirectResponse
+     * @param Request $request HTTPリクエストインスタンス
+     * @param Task $task 更新対象のタスクモデル
+     * @return RedirectResponse 処理完了後のリダイレクトレスポンス
      */
-    public function update(Request $request, Task $task)
+    public function update(Request $request, Task $task): RedirectResponse
     {
-        // ▼ TaskPolicy の update メソッドを呼び出し、他人のタスク改変を防止する
+        // TaskPolicy の update メソッドを呼び出し、他人のタスク改変を防止する
         $this->authorize('update', $task);
 
         $validated = $request->validate([
@@ -168,6 +212,7 @@ class TaskController extends Controller
             'category' => 'nullable|in:inbox,work,personal,growth,health,finance',
             'sub_category' => 'nullable|string',
             'priority' => 'nullable|string',
+            'routine_template_id' => 'nullable|exists:routine_templates,id',
         ]);
 
         $task->update($validated);
@@ -176,50 +221,100 @@ class TaskController extends Controller
     }
 
     /**
-     * 単一タスクの削除処理
-     * TaskPolicy による所有権・認可チェックを実行し、許可された場合のみ削除する
+     * =====================================================================================
+     * 【メソッド名】 removeRoutine
+     * 【概要】 ルーティンの紐づき解除およびテンプレート削除処理
+     * =====================================================================================
+     * ルーティンの紐づきを解除し、テンプレートも削除して完全に通常タスクに一本化します。
      *
-     * @param Task $task
-     * @return \Illuminate\Http\RedirectResponse
+     * @param Request $request HTTPリクエストインスタンス
+     * @param Task $task 対象のタスクモデル
+     * @return RedirectResponse 処理完了後のリダイレクトレスポンス
      */
-    public function destroy(Task $task)
+    public function removeRoutine(Request $request, Task $task): RedirectResponse
     {
-        // ▼ TaskPolicy の delete メソッドを呼び出し、他人のタスク削除を防止する
-        $this->authorize('delete', $task);
+        $this->authorize('update', $task);
 
-        $task->delete();
+        \DB::transaction(function () use ($task) {
+            $routineTemplate = $task->routineTemplate;
+
+            // 1. タスクの routine_template_id を null に更新して単発タスクにする
+            $task->update(['routine_template_id' => null]);
+
+            // 2. 大元のルーティンテンプレートを削除して自動再生成を防ぐ
+            if ($routineTemplate) {
+                $routineTemplate->delete();
+            }
+        });
 
         return redirect()->back();
     }
 
     /**
-     * 複数タスクの一括削除処理
-     * 他ユーザーのタスクIDが含まれていても除外され、自身のタスクのみ安全に削除する
+     * =====================================================================================
+     * 【メソッド名】 destroy
+     * 【概要】 単一タスクの削除処理
+     * =====================================================================================
+     * TaskPolicy による所有権・認可チェックを実行し、許可された場合のみ削除します。
      *
-     * @param Request $request
-     * @return \Illuminate\Http\RedirectResponse
+     * @param Request $request HTTPリクエストインスタンス
+     * @param Task $task 削除対象のタスクモデル
+     * @return RedirectResponse 処理完了後のリダイレクトレスポンス
      */
-    public function bulkDestroy(Request $request)
+    public function destroy(Request $request, Task $task): RedirectResponse
+    {
+        $this->authorize('delete', $task);
+
+        // データベースのトランザクションを使って安全に同時削除する
+        \DB::transaction(function () use ($task) {
+            // もしルーティン由来のタスクで、かつ親テンプレートを一緒に消す場合
+            if ($task->routine_template_id) {
+                $routineTemplate = $task->routineTemplate;
+                if ($routineTemplate) {
+                    $routineTemplate->delete(); // 親のテンプレートを削除すれば、二度と再生成されなくなる
+                }
+            }
+
+            $task->delete();
+        });
+
+        return redirect()->back();
+    }
+
+    /**
+     * =====================================================================================
+     * 【メソッド名】 bulkDestroy
+     * 【概要】 複数タスクの一括削除処理
+     * =====================================================================================
+     * 他ユーザーのタスクIDが含まれていても除外され、自身のタスクのみ安全に削除します。
+     *
+     * @param Request $request HTTPリクエストインスタンス
+     * @return RedirectResponse 処理完了後のリダイレクトレスポンス
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
     {
         $request->validate([
             'ids' => ['required', 'array'],
             'ids.*' => ['exists:tasks,id'],
         ]);
 
-        // ▼ ログインユーザーの所有するタスクに限定して一括削除を実行する
+        // ログインユーザーの所有するタスクに限定して一括削除を実行する
         Auth::user()->tasks()->whereIn('id', $request->ids)->delete();
 
         return redirect()->back();
     }
 
     /**
-     * 複数タスクの一括更新処理
-     * 他ユーザーのタスクが巻き添えにならないよう、ログインユーザーのスコープ内で一括更新する
+     * =====================================================================================
+     * 【メソッド名】 bulkUpdate
+     * 【概要】 複数タスクの一括更新処理
+     * =====================================================================================
+     * 他ユーザーのタスクが巻き添えにならないよう、ログインユーザーのスコープ内で一括更新します。
      *
-     * @param Request $request
-     * @return \Illuminate\Http\RedirectResponse
+     * @param Request $request HTTPリクエストインスタンス
+     * @return RedirectResponse 処理完了後のリダイレクトレスポンス
      */
-    public function bulkUpdate(Request $request)
+    public function bulkUpdate(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'ids' => ['required', 'array'],
@@ -229,6 +324,7 @@ class TaskController extends Controller
             'category' => ['nullable', 'in:inbox,work,personal,growth,health,finance'],
             'sub_category' => ['nullable', 'string'],
             'priority' => ['nullable', 'in:high,medium,low'],
+            'routine_template_id' => ['nullable', 'exists:routine_templates,id'],
         ]);
 
         $updateData = collect($validated)
@@ -237,7 +333,7 @@ class TaskController extends Controller
             ->toArray();
 
         if (!empty($updateData)) {
-            // ▼ ログインユーザーのタスクのみを一括更新対象にする
+            // ログインユーザーのタスクのみを一括更新対象にする
             Auth::user()->tasks()->whereIn('id', $validated['ids'])->update($updateData);
         }
 

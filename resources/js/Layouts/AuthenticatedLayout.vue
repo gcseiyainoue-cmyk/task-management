@@ -1,20 +1,18 @@
-<!--
- =====================================================================================
- 【ファイル名】 AuthenticatedLayout.vue (または Navigation/Layout系コンポーネント)
- 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーション / アプリケーション共通レイアウト）
- =====================================================================================
- 【実務における設計思想】
- 認証済みユーザー向けアプリケーション全体の共通外枠（レイアウト）を担当するコンポーネントです。
- PC用ナビゲーションバー、モバイル用のハンバーガーメニューおよびドロップダウン、
- ログインユーザー名やログアウト機能、さらに各画面ごとのヘッダーやメインコンテンツを差し込む
- スロット（`<slot>` / `<slot name="header" />`）を集約しています。
- Tailwind CSSによるガラスモーフィズム（`backdrop-blur-md`）や、レスポンシブな
- 表示切り替え（`sm:flex` / `sm:hidden`）を適用し、一貫した洗練されたUXを提供します。
--->
 <script setup>
+/**
+ * =====================================================================================
+ * 【ファイル名】 AuthenticatedLayout.vue
+ * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーション / アプリケーション共通レイアウト）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * アプリケーション全体の共通レイアウトを定義するコンポーネントです。
+ * ヘッダー、ナビゲーションバー（PC/スマホ対応）、ユーザー情報、ログアウト機能などを集約し、
+ * 各ページ（ダッシュボード、ルーティン管理、ガイド等）の土台となる共通フレームを提供します。
+ */
 import { ref } from 'vue';
 import { Link } from '@inertiajs/vue3';
 
+// スマホ用ナビゲーションドロップダウンの開閉状態を管理するリアクティブステート
 const showingNavigationDropdown = ref(false);
 </script>
 
@@ -28,7 +26,7 @@ const showingNavigationDropdown = ref(false);
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="flex justify-between h-16">
                         <div class="flex items-center gap-6">
-                            <!-- ロゴ / アプリ名 -->
+                            <!-- ロゴ / アプリ名（ダッシュボード画面へのリンク） -->
                             <div class="shrink-0 flex items-center">
                                 <Link :href="route('dashboard')" class="font-bold text-base text-slate-900 tracking-tight flex items-center gap-2">
                                     <span class="text-xl">🧩</span> 
@@ -38,15 +36,29 @@ const showingNavigationDropdown = ref(false);
 
                             <!-- ナビゲーションリンク（PC用） -->
                             <div class="hidden sm:flex sm:items-center sm:gap-1.5">
+                                <!-- ダッシュボードへのリンク -->
                                 <Link 
                                     :href="route('dashboard')" 
                                     :class="[
                                         'px-3.5 py-2 rounded-xl text-xs font-semibold transition',
-                                        route().current('dashboard') ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                                        (route().current('dashboard') && !route().params?.view) ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
                                     ]"
                                 >
                                     ダッシュボード
                                 </Link>
+
+                                <!-- 🔄 ルーティン管理画面へのリンク（ダッシュボード統合ビュー） -->
+                                <Link 
+                                    :href="route('dashboard', { view: 'routines' })" 
+                                    :class="[
+                                        'px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5',
+                                        (route().current('dashboard') && route().params?.view === 'routines') ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                                    ]"
+                                >
+                                    <span>🔄</span> ルーティン管理
+                                </Link>
+
+                                <!-- 使い方ガイドへのリンク -->
                                 <Link 
                                     :href="route('tasks.guide')" 
                                     :class="[
@@ -56,7 +68,8 @@ const showingNavigationDropdown = ref(false);
                                 >
                                     <span>📖</span> 使い方ガイド
                                 </Link>
-                                <!-- ▼ PC用に追加したコード・UIガイドへのリンク -->
+                                
+                                <!-- コード・UIガイドへのリンク -->
                                 <Link 
                                     :href="route('dashboard.code-guide')" 
                                     :class="[
@@ -69,7 +82,7 @@ const showingNavigationDropdown = ref(false);
                             </div>
                         </div>
 
-                        <!-- ユーザー情報・ログアウト -->
+                        <!-- ユーザー情報・ログアウト（PC用） -->
                         <div class="hidden sm:flex sm:items-center sm:gap-3">
                             <div class="text-xs font-semibold text-slate-700 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/60">
                                 {{ $page.props.auth.user.name }} さん
@@ -84,7 +97,7 @@ const showingNavigationDropdown = ref(false);
                             </Link>
                         </div>
 
-                        <!-- ハンバーガーメニュー（スマホ用） -->
+                        <!-- ハンバーガーメニューボタン（スマホ用） -->
                         <div class="-mr-2 flex items-center sm:hidden">
                             <button 
                                 @click="showingNavigationDropdown = !showingNavigationDropdown"
@@ -106,6 +119,13 @@ const showingNavigationDropdown = ref(false);
                         class="block px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
                     >
                         ダッシュボード
+                    </Link>
+                    <!-- 🔄 スマホ用ルーティン管理リンク -->
+                    <Link 
+                        :href="route('dashboard', { view: 'routines' })" 
+                        class="block px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition flex items-center gap-2"
+                    >
+                        <span>🔄</span> ルーティン管理
                     </Link>
                     <Link 
                         :href="route('tasks.guide')" 
@@ -133,7 +153,7 @@ const showingNavigationDropdown = ref(false);
                 </div>
             </nav>
 
-            <!-- ページヘッダー -->
+            <!-- ページヘッダー（各ページ個別のヘッダーコンテンツを挿入するスロット） -->
             <header v-if="$slots.header" class="bg-white/85 backdrop-blur-md border-b border-slate-200/60 py-4">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <slot name="header" />
@@ -142,7 +162,7 @@ const showingNavigationDropdown = ref(false);
         </div>
         <!-- ▲ 固定ラッパーここまで -->
 
-        <!-- メインコンテンツ -->
+        <!-- メインコンテンツ（各ページの固有コンポーネントが描画されるスロット） -->
         <main>
             <slot />
         </main>

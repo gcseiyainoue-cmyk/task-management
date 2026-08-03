@@ -14,10 +14,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // TaskSeeder 内でマルチユーザー（テストユーザーA・B）とタスクを一括生成するため、
-        // ここでは TaskSeeder のみを呼び出す設計に統一します。
         $this->call([
             TaskSeeder::class,
+            RoutineSeeder::class,
         ]);
     }
 }

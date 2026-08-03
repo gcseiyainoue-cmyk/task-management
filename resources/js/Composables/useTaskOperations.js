@@ -4,13 +4,22 @@
  * 【アーキテクチャ上の位置づけ】 ビジネスロジック層（Composables / データ操作・API通信）
  * =====================================================================================
  * 【実務における設計思想】
- * UIコンポーネント（Index.vueなど）から「サーバー通信の詳細」や「確認ダイアログの制御」
+ * UIコンポーネント（Dashboard.vueなど）から「サーバー通信の詳細」や「確認ダイアログの制御」
  * を完全に切り離し、単一責任の原則（SRP）に基づいたCRUD・一括処理ロジックを集約しています。
  * Inertia.jsの `router` を活用し、画面のリロードを伴わない非同期通信とスクロール位置の維持を実現します。
  */
 
 import { router } from '@inertiajs/vue3';
 
+/**
+ * タスクに関するデータ操作およびAPI通信ロジックを提供するComposable
+ * @param {Object} selectedTaskIds - 選択中のタスクIDリストのリアクティブ参照
+ * @param {Object} isSelectionMode - 選択モードの有効状態を示すリアクティブ参照
+ * @param {Function} triggerMovedHighlight - タスク移動時のハイライトトリガー関数
+ * @param {Function} closeMenuModal - メニューモーダルを閉じるための関数
+ * @param {Function} showToast - トースト通知を表示するための関数
+ * @returns {Object} 各種タスク操作および一括処理のハンドラー関数群
+ */
 export function useTaskOperations(selectedTaskIds, isSelectionMode, triggerMovedHighlight, closeMenuModal, showToast) {
     
     /**
@@ -20,29 +29,23 @@ export function useTaskOperations(selectedTaskIds, isSelectionMode, triggerMoved
      * @param {String} successMessage - 成功時にトースト通知に表示するメッセージ
      */
     const bulkUpdate = (payload, successMessage) => {
-        // 【ガード句】選択中のタスクが0件の場合は処理を中断
         if (selectedTaskIds.value.length === 0) return;
 
-        // 【UX安全網】一括変更時は意図せぬ誤操作を防ぐため、ブラウザ標準の確認ダイアログを挟みます
         if (!confirm(`選択した ${selectedTaskIds.value.length} 件のタスクを更新しますか？`)) {
             return;
         }
 
-        // 【実務の重要テクニック】リアクティブ配列をそのまま非同期処理に渡すと、
-        // 途中で選択解除された場合に参照が狂うため、スプレッド構文で現在のID群を「スナップショット（複製）」として固定します。
         const targetIds = [...selectedTaskIds.value];
         
         router.patch(route('tasks.bulk-update'), { ids: targetIds, ...payload }, {
-            preserveScroll: true, // 【UX向上】通信完了後も現在のスクロール位置を維持
+            preserveScroll: true,
             onSuccess: () => {
                 showToast(successMessage);
                 
-                // 完了状態の変更を伴う一括処理の場合、該当するタスク群にハイライト・点滅アニメーションを適用
                 if (payload.is_completed !== undefined) {
                     targetIds.forEach(id => triggerMovedHighlight(id));
                 }
                 
-                // 処理成功後は一括選択の状態をクリアし、選択モードを終了してモーダルを閉じます
                 selectedTaskIds.value = [];
                 isSelectionMode.value = false;
                 closeMenuModal();
@@ -63,7 +66,6 @@ export function useTaskOperations(selectedTaskIds, isSelectionMode, triggerMoved
 
         const targetIds = [...selectedTaskIds.value];
 
-        // InertiaのDELETEリクエストでは、データペイロードを明示的に `data` プロパティに包んで渡す必要があります
         router.delete(route('tasks.bulk-destroy'), {
             data: { ids: targetIds },
             preserveScroll: true,
@@ -84,19 +86,22 @@ export function useTaskOperations(selectedTaskIds, isSelectionMode, triggerMoved
     const toggleTask = (task) => {
         router.patch(route('tasks.update', task.id), { is_completed: !task.is_completed }, { 
             preserveScroll: true,
-            onSuccess: () => triggerMovedHighlight(task.id) // リスト間で移動した際に視覚的なハイライトをトリガー
+            onSuccess: () => triggerMovedHighlight(task.id)
         });
     };
 
     /**
      * 【タスク名インライン編集更新関数】
-     * リスト上でタスク名が直接書き換えられた際に、バックエンドへ新しいタイトルを保存します。
+     * @param {Object} task - 対象のタスクオブジェクト
+     * @param {String} title - 新しいタスク名
      */
     const updateTitle = (task, title) => router.patch(route('tasks.update', task.id), { title }, { preserveScroll: true });
 
     /**
      * 【個別：カテゴリ変更処理】
-     * タスクのカテゴリおよびサブカテゴリを変更し、モーダルを閉じる一連のフローを実行します。
+     * @param {Object} task - 対象のタスクオブジェクト
+     * @param {String} category - 新しい親カテゴリキー
+     * @param {String} subCategory - 新しいサブカテゴリキー
      */
     const updateCategoryAndSub = (task, category, subCategory) => {
         if (!confirm('このタスクのカテゴリを変更しますか？')) return;
@@ -106,6 +111,8 @@ export function useTaskOperations(selectedTaskIds, isSelectionMode, triggerMoved
 
     /**
      * 【個別：重要度（優先度）変更処理】
+     * @param {Object} task - 対象のタスクオブジェクト
+     * @param {String} priority - 新しい優先度（'high', 'medium', 'low'）
      */
     const updatePriority = (task, priority) => {
         if (!confirm('このタスクの重要度を変更しますか？')) return;
@@ -115,6 +122,8 @@ export function useTaskOperations(selectedTaskIds, isSelectionMode, triggerMoved
 
     /**
      * 【個別：期限日変更処理】
+     * @param {Object} task - 対象のタスクオブジェクト
+     * @param {String} due_date - 新しい期限日文字列
      */
     const updateDueDate = (task, due_date) => {
         if (!confirm('このタスクの期限日を変更しますか？')) return;
@@ -123,16 +132,51 @@ export function useTaskOperations(selectedTaskIds, isSelectionMode, triggerMoved
     };
     
     /**
-     * 【単一タスク削除関数】
+     * 【単一タスク削除関数（ルーティン判定・専用ダイアログ対応版）】
+     * @param {Object|Number|String} taskOrId - タスクオブジェクト、またはタスクID
+     * @param {Boolean} [skipConfirm=false] - 確認ダイアログをスキップするかどうか
+     * @returns {Promise<Boolean>} 削除成功時はtrue、キャンセル時はfalseを返すPromise
      */
-    const deleteTask = (task) => {
-        if (!confirm('このタスクを削除しますか？')) {
-            return;
-        }
-        router.delete(route('tasks.destroy', task.id), { preserveScroll: true });
+    const deleteTask = (taskOrId, skipConfirm = false) => {
+        return new Promise((resolve, reject) => {
+            // オブジェクトとして渡されているか判定し、プロパティを抽出する
+            const task = (typeof taskOrId === 'object' && taskOrId !== null) ? taskOrId : null;
+            const id = task ? task.id : taskOrId;
+            const routineTemplateId = task ? task.routine_template_id : null;
+            
+            if (!id) {
+                console.error('削除対象のIDが特定できません:', taskOrId);
+                return reject(new Error('Invalid task ID'));
+            }
+
+            if (!skipConfirm) {
+                let message = 'このタスクを削除しますか？';
+                
+                // ▼ ここでルーティン由来のタスクか判定してメッセージを切り替える
+                if (routineTemplateId) {
+                    message = '【確認】このタスクはルーティンから生成されています。\n\n大元のルーティン設定も一緒に削除され、今後自動生成されなくなりますが、本当に削除しますか？';
+                }
+
+                if (!confirm(message)) {
+                    return resolve(false);
+                }
+            }
+
+            router.delete(route('tasks.destroy', id), {
+                preserveScroll: true,
+                onSuccess: () => {
+                    showToast('タスクを削除しました');
+                    resolve(true);
+                },
+                onError: (errors) => {
+                    console.error('Delete task error:', errors);
+                    showToast('削除に失敗しました');
+                    reject(errors);
+                }
+            });
+        });
     };
 
-    // コンポーネント側で利用できるようにすべての操作関数を外部へ公開します
     return {
         bulkUpdate,
         bulkDelete,

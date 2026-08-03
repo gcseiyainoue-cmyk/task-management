@@ -1,9 +1,15 @@
 <script setup>
+/**
+ * =====================================================================================
+ * 【ファイル名】 DashboardCodeGuide.vue（コード・UI対応ガイド）
+ * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーション / リファレンス画面）
+ * =====================================================================================
+ */
 import { ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
-// 各セクションの開閉状態（検索・フィルターを開いた状態に設定）
+// 各セクションの開閉状態（検索・フィルターを開いた状態に初期化）
 const openSections = ref({
     filter: true,
     create: false,
@@ -11,6 +17,9 @@ const openSections = ref({
     menu: false,
 });
 
+/**
+ * 【アコーディオンの開閉を切り替える関数】
+ */
 const toggleSection = (key) => {
     openSections.value[key] = !openSections.value[key];
 };
@@ -52,7 +61,7 @@ const toggleSection = (key) => {
             <!-- アコーディオンリスト -->
             <div class="space-y-4">
                 
-                <!-- 01. 検索・絞り込み・ソート機能（実務3層構造解説） -->
+                <!-- 01. 検索・絞り込み・ソート機能 -->
                 <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden transition-all">
                     <button 
                         @click="toggleSection('filter')" 
@@ -72,7 +81,7 @@ const toggleSection = (key) => {
 
                     <div v-show="openSections.filter" class="px-6 pb-7 pt-2 border-t border-slate-100 space-y-6">
                         <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                            実務開発では、巨大なコード（スパゲッティコード）を防ぐため、役割を明確に分ける<strong>「関心の分離」</strong>が徹底されています。この検索・絞り込み機能は、以下の3つのファイルが連携して美しく動作しています。
+                            実務開発では、巨大なコードを防ぐため、役割を明確に分ける<strong>「関心の分離」</strong>が徹底されています。この検索・絞り込み機能は、以下の3つのファイルが連携して美しく動作しています。
                         </p>
 
                         <!-- 3層構造の役割カード -->
@@ -139,7 +148,7 @@ const toggleSection = (key) => {
                         <div class="space-y-2">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">該当コード 1：TaskControlBar.vue (UI層)</span>
                             <div class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto shadow-inner leading-relaxed">
-<pre><code>&lt;script setup&gt;
+<pre>&lt;script setup&gt;
 import { categoryTree } from '@/Constants/task';
 
 defineProps({
@@ -157,7 +166,7 @@ defineEmits([
     'toggleSortOrder',
     'toggleSelectionMode'
 ]);
-&lt;/script&gt;</code></pre>
+&lt;/script&gt;</pre>
                             </div>
                         </div>
 
@@ -165,7 +174,7 @@ defineEmits([
                         <div class="space-y-2">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">該当コード 2：Index.vue ＆ Composable 連携 (統括・ロジック層)</span>
                             <div class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto shadow-inner leading-relaxed">
-<pre><code>// --- 1. ロジックの呼び出し (useTaskFilterAndSort.js) ---
+<pre>// --- 1. ロジックの呼び出し (useTaskFilterAndSort.js) ---
 const { 
     searchQuery, 
     selectedCategoryFilter, 
@@ -185,7 +194,7 @@ const {
     :is-selection-mode="isSelectionMode"
     @toggle-sort-order="toggleSortOrder"
     @toggle-selection-mode="toggleSelectionMode"
-/&gt;</code></pre>
+/&gt;</pre>
                             </div>
                         </div>
                     </div>
@@ -236,7 +245,7 @@ const {
                         <div class="space-y-2">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">該当コード (Index.vue 抜粋)</span>
                             <div class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto shadow-inner leading-relaxed">
-<pre><code>const isTaskModalOpen = ref(false);
+<pre>const isTaskModalOpen = ref(false);
 const todayStr = new Date().toISOString().split('T')[0];
 
 const form = useForm({
@@ -257,7 +266,7 @@ const submitTask = () => {
             isTaskModalOpen.value = false;
         }
     });
-};</code></pre>
+};</pre>
                             </div>
                         </div>
                     </div>
@@ -307,7 +316,7 @@ const submitTask = () => {
                         <div class="space-y-2">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">該当コード (Index.vue 抜粋)</span>
                             <div class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto shadow-inner leading-relaxed">
-<pre><code>import { useTaskSelection } from '@/Composables/useTaskSelection';
+<pre>import { useTaskSelection } from '@/Composables/useTaskSelection';
 import { useTaskOperations } from '@/Composables/useTaskOperations';
 
 const { 
@@ -319,7 +328,7 @@ const {
     toggleSelectCompleted 
 } = useTaskSelection(activeTasks, completedTasksList);
 
-const { bulkDelete } = useTaskOperations(...);</code></pre>
+const { bulkDelete } = useTaskOperations(...);</pre>
                             </div>
                         </div>
                     </div>
@@ -363,7 +372,7 @@ const { bulkDelete } = useTaskOperations(...);</code></pre>
                         <div class="space-y-2">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">該当コード (Index.vue 抜粋)</span>
                             <div class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto shadow-inner leading-relaxed">
-<pre><code>const activeMenuTask = ref(null);
+<pre>const activeMenuTask = ref(null);
 const activeMenuType = ref(null);
 
 const openMenuModal = (task, type, event) => {
@@ -375,7 +384,7 @@ const openMenuModal = (task, type, event) => {
 const closeMenuModal = () => {
     activeMenuTask.value = null;
     activeMenuType.value = null;
-};</code></pre>
+};</pre>
                             </div>
                         </div>
                     </div>

@@ -13,11 +13,18 @@
 
 import { ref } from 'vue';
 
+/**
+ * トースト通知の状態管理および表示制御ロジックを提供するComposable
+ * @returns {Object} トーストメッセージのステートおよび表示ハンドラー
+ */
 export function useToast() {
     // --- ローカルステート（現在表示中のトーストメッセージ） ---
     const toastMessage = ref(null);
 
-    // --- トースト通知を表示し、4秒後に自動消去するハンドラー ---
+    /**
+     * トースト通知を表示し、4秒後に自動消去するハンドラー
+     * @param {String} msg - 表示するトーストメッセージ
+     */
     const showToast = (msg) => {
         toastMessage.value = msg;
         setTimeout(() => { toastMessage.value = null; }, 4000);

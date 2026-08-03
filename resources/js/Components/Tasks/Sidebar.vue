@@ -16,15 +16,20 @@
 import { Link } from '@inertiajs/vue3';
 import { categoryTree } from '@/Constants/task';
 
-// --- プロパティの定義（全タスクデータ、現在選択中のカテゴリ、本日の日付文字列） ---
+// --- プロパティの定義（親コンポーネントから受け取るデータ群） ---
 defineProps({
+    // 全タスクデータの配列（各カテゴリやビューごとの件数バッジを動的に算出するために使用）
     tasks: Array,
+    // 現在選択されているカテゴリの識別子（アクティブ状態のスタイリング判定に使用）
     currentCategory: String,
+    // 本日の日付を表す文字列（'YYYY-MM-DD'形式。今日のタスク件数をフィルタリングするために使用）
     todayStr: String,
 });
 
 // --- イベント定義（リンク選択時にドロワーを閉じるための通知） ---
-defineEmits(['close']);
+defineEmits([
+    'close' // リンク選択時にドロワーやサイドバーを閉じる通知
+]);
 </script>
 
 <template>

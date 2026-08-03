@@ -13,6 +13,12 @@
 import { ref } from 'vue';
 import { categoryTree, priorityConfig } from '@/Constants/task';
 
+/**
+ * 個別タスクのインタラクションおよびアニメーション制御を提供するComposable
+ * @param {Object} props - コンポーネントのpropsオブジェクト（task, isSelectionModeを含む）
+ * @param {Function} emit - イベント発火用のVue emit関数
+ * @returns {Object} 編集状態、アニメーション状態、および各種ハンドラーやフォーマット関数
+ */
 export function useTaskItem(props, emit) {
     // --- 1. ローカル状態（リアクティブ変数） ---
     const editingTaskId = ref(null); // 現在インライン編集中のタスクID
@@ -96,6 +102,9 @@ export function useTaskItem(props, emit) {
     /**
      * 【サブカテゴリメタデータ取得関数】
      * 親カテゴリとサブカテゴリのキーから、対応するアイコンやラベルを安全に引き当てます。
+     * @param {String} category - 親カテゴリのキー
+     * @param {String} subCategoryKey - サブカテゴリのキー
+     * @returns {Object} 対応するメタデータオブジェクト
      */
     const getSubCategoryMeta = (category, subCategoryKey) => {
         const parent = categoryTree[category] || categoryTree.inbox;
@@ -106,6 +115,9 @@ export function useTaskItem(props, emit) {
     /**
      * 【期日バッジのクラス判定関数】
      * 期限日と現在日を比較し、期限切れ（当日含む）のタスクには警告用のスタイルを返します。
+     * @param {String} dueDate - 期限日文字列
+     * @param {Boolean} isCompleted - 完了状態かどうか
+     * @returns {String} 適用するCSSクラス文字列
      */
     const getDueDateBadgeClass = (dueDate, isCompleted) => {
         if (!dueDate || isCompleted) return 'bg-slate-50 border-slate-200 text-slate-500';
@@ -117,6 +129,8 @@ export function useTaskItem(props, emit) {
     /**
      * 【作成日時フォーマット関数】
      * バックエンドからのISO日時文字列を、UIで見やすい形式（MM/DD HH:mm）に変換します。
+     * @param {String} dateStr - ISO日時文字列
+     * @returns {String} フォーマット済み日時文字列
      */
     const formatCreatedAt = (dateStr) => {
         if (!dateStr) return '';

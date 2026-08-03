@@ -1,4 +1,14 @@
 <script setup>
+/**
+ * =====================================================================================
+ * 【ファイル名】 TaskGuide.vue
+ * 【アーキテクチャ上の位置づけ】 UI層（プレゼンテーション / 使い方ガイド画面）
+ * =====================================================================================
+ * 【実務における設計思想】
+ * アプリケーションの使い方を4つのステップ（新規追加、コントロールバー、カード仕様、一括操作）
+ * に分解し、実際のUIパーツを模した高精度のプレビューを交えながら直感的に解説する
+ * ユーザーフレンドリーなガイドコンポーネントです。
+ */
 import { Head, Link } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 </script>
@@ -187,28 +197,23 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
                         各カードは左端に「タスク完了」ボタンと、上部にタイトル、その下にカテゴリバッジを配置。右側には「優先度」「期限日」「作成日時」が美しく整列しています。
                     </p>
 
-                    <!-- Step 3 プレビュー（最新の TaskCard.vue 構造を完全同期） -->
+                    <!-- Step 3 プレビュー -->
                     <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-6 space-y-3">
                         <div class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
                             <span>🖥️</span> タスクカードのプレビュー
                         </div>
                         <div class="bg-white rounded-2xl p-3.5 sm:p-4.5 border border-slate-200/80 shadow-sm flex flex-col gap-3 sm:gap-0 sm:flex-row sm:items-center sm:justify-between overflow-hidden">
                             
-                            <!-- メインコンテンツ（左側：完了ボタン＋タイトル＋カテゴリ） -->
                             <div class="flex items-center gap-3 min-w-0 flex-1 w-full">
-                                <!-- 完了ボタン -->
                                 <div class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold border transition-all duration-300 shrink-0 whitespace-nowrap bg-slate-100 border-slate-300 text-slate-700 shadow-2xs">
                                     <span class="text-slate-400">□</span>
                                     <span>未完了</span>
                                 </div>
 
-                                <!-- タイトル・カテゴリ設定 -->
                                 <div class="min-w-0 flex-1 space-y-1">
-                                    <!-- タイトル -->
                                     <div class="text-xs sm:text-sm font-bold leading-normal tracking-tight text-slate-900 py-0.5 break-words">
                                         資料をまとめる
                                     </div>
-                                    <!-- カテゴリバッジ -->
                                     <div class="flex items-center gap-1.5 flex-wrap">
                                         <div class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 shadow-2xs whitespace-nowrap shrink-0">
                                             <span>📥</span>
@@ -222,28 +227,23 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
                                 </div>
                             </div>
 
-                            <!-- 右側：アクションボタン・メタデータ -->
                             <div class="flex items-center justify-between sm:justify-end gap-1.5 pt-2 sm:pt-0 border-t border-slate-100 sm:border-t-0 shrink-0 w-full sm:w-auto">
                                 <div class="flex items-center gap-1.5 flex-wrap">
-                                    <!-- 優先度 -->
                                     <div class="px-2.5 py-1 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 shadow-2xs text-[11px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
                                         <span>⚡</span>
                                         <span>高</span>
                                         <span class="text-[9px] opacity-60">▼</span>
                                     </div>
-                                    <!-- 期日 -->
                                     <div class="border border-rose-200 bg-rose-50 text-rose-700 rounded-xl px-2.5 py-1 shadow-2xs text-[11px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
                                         <span>📅</span>
                                         <span>2026-07-23</span>
                                         <span class="text-[9px] opacity-60">▼</span>
                                     </div>
-                                    <!-- 作成日時 -->
                                     <div class="px-2 py-1 rounded-xl bg-slate-100/60 text-slate-400 text-[10px] font-medium flex items-center gap-1 shrink-0 whitespace-nowrap select-none">
                                         <span>🕒</span>
                                         <span>作成: 07/23 11:34</span>
                                     </div>
                                 </div>
-                                <!-- 削除ボタン -->
                                 <div class="text-slate-300 p-1.5 rounded-xl shrink-0 ml-auto sm:ml-0 text-xs">
                                     ✕
                                 </div>

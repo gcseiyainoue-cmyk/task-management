@@ -8,23 +8,27 @@
  * スマートフォンなどの狭小画面デバイスにおいて、親指が届きやすい画面下部に常時固定（fixed）される
  * ボトムナビゲーションバーです。
  * よく利用される主要なビュー（すべて、今日、未分類）へのダイレクトな遷移リンクに加え、
- * 中央には新規タスク追加モーダルを即座に起動するアクセントボタン（FAB風）、
+ * 中央には新規作成用のアクセントボタン（FAB風 ※タブに応じてタスクまたはルーティン作成を動的起動）、
  * さらにその他のカテゴリや詳細メニューを開くためのドロワー起動ボタンを配置しています。
- * 件数に応じた動的バッジ表示や、アクティブ状態の視覚的フィードバックを備え、
- * モバイルにおける高い操作性とUXを実現しています。
  */
 
 import { Link } from '@inertiajs/vue3';
 
-// --- プロパティの定義（現在選択中のカテゴリ、今日および未分類のタスク件数） ---
+// --- プロパティの定義（親コンポーネントから受け取るデータ群） ---
 defineProps({
+    // 現在選択されているカテゴリやビューの識別子（タブのアクティブ状態のスタイリング判定に使用）
     currentCategory: String,
+    // 本日のタスク件数（今日タブのバッジカウンター表示に使用）
     todayCount: Number,
+    // 未分類タスクの件数（未分類タブのバッジカウンター表示に使用）
     inboxCount: Number,
 });
 
-// --- イベント定義（メニューおよびタスク作成モーダルのオープンを通知） ---
-defineEmits(['open-menu', 'open-task-modal']);
+// --- イベント定義（メニューおよび作成モーダルオープン用の親イベント通知） ---
+const emit = defineEmits([
+    'open-menu',       // モバイル用メニュー（サイドバー/ドロワー）の展開を親へ通知
+    'open-task-modal'  // タスクまたはルーティン作成モーダルのオープンを親へ通知
+]);
 </script>
 
 <template>
@@ -51,7 +55,7 @@ defineEmits(['open-menu', 'open-task-modal']);
             </span>
         </Link>
 
-        <!-- 新規タスク作成ボタン（中央配置のアクセントボタン） -->
+        <!-- 新規作成ボタン（中央配置のアクセントボタン ※タブの状態に応じてタスク/ルーティン作成を起動） -->
         <button 
             @click="$emit('open-task-modal')"
             class="flex items-center justify-center w-10 h-10 rounded-full bg-slate-900 text-white shadow-md active:scale-95 transition cursor-pointer hover:bg-slate-800"
@@ -59,7 +63,7 @@ defineEmits(['open-menu', 'open-task-modal']);
             <span class="text-xl font-normal leading-none">+</span>
         </button>
 
-        <!-- 「未分類」への遷移リンク（こちらはカテゴリ分類のためそのまま） -->
+        <!-- 「未分類」への遷移リンク -->
         <Link 
             :href="route('dashboard', { category: 'inbox' })"
             :class="['flex flex-col items-center gap-0.5 text-[10px] font-bold transition px-2 py-1 rounded-xl relative', currentCategory === 'inbox' ? 'text-slate-900 bg-slate-100' : 'text-slate-400 hover:text-slate-600']"

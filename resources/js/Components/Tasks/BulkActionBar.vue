@@ -11,15 +11,21 @@
  * ロジックを持たない純粋なUIパーツとして設計されています。
  */
 
-// --- プロパティの定義（現在選択されているタスクの件数） ---
+// --- プロパティの定義（親コンポーネントから受け取るデータ群） ---
 defineProps({
+    // 現在選択されているタスクの件数（アクションバーの選択中カウンター表示に使用）
     selectedCount: Number,
 });
 
 // --- イベント定義（親コンポーネントへ一括操作のアクションを通知） ---
-defineEmits([
-    'complete', 'uncomplete', 'open-due-modal', 
-    'open-category-modal', 'open-priority-modal', 'delete', 'clear'
+const emit = defineEmits([
+    'complete',            // 選択されたタスクの一括完了処理を親へ通知
+    'uncomplete',          // 選択されたタスクの一括未完了処理を親へ通知
+    'open-due-modal',      // 一括期限変更モーダルのオープン処理を親へ通知
+    'open-category-modal', // 一括カテゴリ変更モーダルのオープン処理を親へ通知
+    'open-priority-modal', // 一括優先度変更モーダルのオープン処理を親へ通知
+    'delete',              // 選択されたタスクの一括削除処理を親へ通知
+    'clear'                // 選択状態のクリア（アクションバーの非表示化）を親へ通知
 ]);
 </script>
 

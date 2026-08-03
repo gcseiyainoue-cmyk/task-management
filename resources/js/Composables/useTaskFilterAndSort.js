@@ -13,6 +13,11 @@
 import { ref, computed } from 'vue';
 import { categoryTree } from '@/Constants/task';
 
+/**
+ * タスクのフィルタリングおよびソート機能を提供するComposable
+ * @param {Object} props - コンポーネントのpropsオブジェクト（filteredTasksを含む）
+ * @returns {Object} 検索クエリ、カテゴリ絞り込み、ソート状態、およびアクティブ/完了済みタスクの算出プロパティ
+ */
 export function useTaskFilterAndSort(props) {
     // --- 1. 検索・絞り込み・ソートのローカル状態（リアクティブ変数） ---
     const searchQuery = ref('');            // 検索窓に入力された文字列

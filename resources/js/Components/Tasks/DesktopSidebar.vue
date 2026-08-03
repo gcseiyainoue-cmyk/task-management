@@ -15,11 +15,18 @@
 import { Link } from '@inertiajs/vue3';
 import { categoryTree } from '@/Constants/task';
 
-// --- プロパティの定義（全タスクデータ、現在選択中のカテゴリ、本日の日付文字列） ---
+// --- プロパティの定義（親コンポーネントから受け取るデータ群） ---
 defineProps({
+    // 全タスクデータの配列（各カテゴリやビューごとの件数バッジを動的に算出するために使用）
     tasks: Array,
+    // 現在選択されているカテゴリの識別子（アクティブ状態のスタイリング判定に使用）
     currentCategory: String,
+    // 現在選択されているビューの識別子（ルーティン管理などの表示判定に使用）
+    currentView: String,
+    // 本日の日付を表す文字列（'YYYY-MM-DD'形式。今日のタスク件数をフィルタリングするために使用）
     todayStr: String,
+    // 登録されているルーティンテンプレートの配列（ルーティン管理ビューの件数表示に使用）
+    routineTemplates: Array,
 });
 </script>
 
@@ -51,6 +58,23 @@ defineProps({
                         {{ tasks.length }}
                     </span>
                 </Link>
+
+                <!-- ルーティン管理を表示するリンク -->
+                <Link 
+                    :href="route('dashboard', { view: 'routines' })" 
+                    :class="[
+                        'w-full p-2.5 rounded-2xl text-xs font-semibold transition flex items-center justify-between px-3.5 border cursor-pointer', 
+                        currentView === 'routines' 
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-sm' 
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80'
+                    ]"
+                >
+                    <span class="flex items-center gap-2 text-xs font-bold"><span>🔄</span> ルーティン管理</span>
+                    <span class="font-mono text-[10px] px-2 py-0.5 rounded-full" :class="currentView === 'routines' ? 'bg-slate-800 text-slate-200' : 'bg-slate-200/60 text-slate-600'">
+                        {{ routineTemplates ? routineTemplates.length : tasks.length }}
+                    </span>
+                </Link>
+
             </div>
         </div>
 

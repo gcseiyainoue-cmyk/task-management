@@ -15,6 +15,10 @@
 import { ref, onMounted, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 
+/**
+ * タスクのハイライトおよびアニメーション状態管理機能を提供するComposable
+ * @returns {Object} 新規IDリスト、点滅マップ、移動マップ、および移動ハイライトトリガー関数
+ */
 export function useTaskHighlight() {
     // --- インステート・ページ情報の取得 ---
     const page = usePage();
@@ -22,7 +26,10 @@ export function useTaskHighlight() {
     const blinkingMap = ref({});
     const recentlyMovedMap = ref({});
 
-    // --- 新規作成されたタスクのフラッシュハイライト処理 ---
+    /**
+     * 新規作成されたタスクのフラッシュハイライト処理
+     * ページプロップスのflashから新規タスクIDを取得し、点滅状態を有効化して20秒後に自動解除する
+     */
     const handleFlashNewTasks = () => {
         const flashIds = page.props.flash?.new_task_ids;
         if (Array.isArray(flashIds) && flashIds.length > 0) {
@@ -36,7 +43,11 @@ export function useTaskHighlight() {
         }
     };
 
-    // --- タスク移動時のハイライトトリガー処理 ---
+    /**
+     * タスク移動時のハイライトトリガー処理
+     * 指定されたタスクIDに対して移動ハイライト状態を有効化し、20秒後に自動解除する
+     * @param {Number|String} taskId - ハイライト対象のタスクID
+     */
     const triggerMovedHighlight = (taskId) => {
         recentlyMovedMap.value[taskId] = true;
         setTimeout(() => {

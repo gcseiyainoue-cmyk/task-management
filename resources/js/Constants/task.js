@@ -12,6 +12,10 @@
  * アプリケーション全体へ安全に反映できるよう保守性を高めています。
  */
 
+/**
+ * アプリケーション全体で利用されるタスクのカテゴリおよびサブカテゴリのツリー構造定義
+ * @type {Object}
+ */
 export const categoryTree = {
     inbox: {
         label: '未分類',
@@ -86,8 +90,16 @@ export const categoryTree = {
     }
 };
 
+/**
+ * タスクカテゴリの表示順序を定義する配列
+ * @type {Array<String>}
+ */
 export const categoryOrder = ['inbox', 'work', 'personal', 'growth', 'health', 'finance'];
 
+/**
+ * タスクの優先度（高・中・低）に対応するラベルやスタイル設定
+ * @type {Object}
+ */
 export const priorityConfig = {
     high: {
         label: '高',
