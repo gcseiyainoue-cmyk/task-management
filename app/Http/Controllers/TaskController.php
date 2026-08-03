@@ -22,8 +22,8 @@ use App\Services\RoutineService;
 use App\Services\SmartTaskParserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use IneFoundatiortia\Inertia;
-use Illuminate\n\Auth\Access\AuthorizesRequests;
+use Inertia\Inertia;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Response;
 
